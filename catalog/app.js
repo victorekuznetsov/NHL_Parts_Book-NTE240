@@ -388,50 +388,107 @@
   function closeCart() { $("#cart").classList.remove("open"); $("#overlay").classList.remove("open"); }
 
   // ---- exports ----------------------------------------------------------
-  function download(name, text, mime) {
-    var blob = new Blob(["﻿" + text], { type: (mime || "text/csv") + ";charset=utf-8" });
+  function downloadBlob(name, blob) {
     var url = URL.createObjectURL(blob);
     var a = el("a"); a.href = url; a.download = name;
     document.body.appendChild(a); a.click();
     setTimeout(function () { document.body.removeChild(a); URL.revokeObjectURL(url); }, 500);
   }
-  function csvCell(v) {
-    v = v == null ? "" : String(v);
-    return /[",;\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+
+  // ---- minimal .xlsx writer (no dependencies, works over file://) ----------
+  // A worksheet where each column is typed: "n" cells become real numbers,
+  // everything else is written as an inline string — so catalog numbers keep
+  // their leading zeros (00106267) as genuine text, no ="…" formula needed.
+  var CRC = (function () {
+    var t = [];
+    for (var n = 0; n < 256; n++) {
+      var c = n;
+      for (var k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1;
+      t[n] = c >>> 0;
+    }
+    return t;
+  })();
+  function crc32(b) {
+    var c = -1;
+    for (var i = 0; i < b.length; i++) c = (c >>> 8) ^ CRC[(c ^ b[i]) & 0xff];
+    return (c ^ -1) >>> 0;
   }
-  function csvRow(arr) { return arr.map(csvCell).join(";"); }
-  // Catalog numbers keep leading zeros (00106267, 09014080). Excel would strip
-  // them by auto-typing the column as a number, so emit them as an ="…" text
-  // formula — Excel then treats the cell as text on a plain double-click open.
-  function xltext(v) {
-    v = v == null ? "" : String(v);
-    return v ? '="' + v.replace(/"/g, '""') + '"' : "";
+  function zipStore(files) {
+    var enc = new TextEncoder(), parts = [], central = [], offset = 0;
+    var u16 = function (n) { return [n & 0xff, (n >> 8) & 0xff]; };
+    var u32 = function (n) { return [n & 0xff, (n >>> 8) & 0xff, (n >>> 16) & 0xff, (n >>> 24) & 0xff]; };
+    files.forEach(function (f) {
+      var data = enc.encode(f.data), name = enc.encode(f.name), crc = crc32(data);
+      var lh = [].concat(u32(0x04034b50), u16(20), u16(0), u16(0), u16(0), u16(0),
+        u32(crc), u32(data.length), u32(data.length), u16(name.length), u16(0));
+      parts.push(new Uint8Array(lh), name, data);
+      central.push(new Uint8Array([].concat(u32(0x02014b50), u16(20), u16(20), u16(0), u16(0),
+        u16(0), u16(0), u32(crc), u32(data.length), u32(data.length), u16(name.length),
+        u16(0), u16(0), u16(0), u16(0), u32(0), u32(offset))), name);
+      offset += lh.length + name.length + data.length;
+    });
+    var cdStart = offset, cdLen = 0;
+    central.forEach(function (p) { cdLen += p.length; });
+    var end = new Uint8Array([].concat(u32(0x06054b50), u16(0), u16(0),
+      u16(files.length), u16(files.length), u32(cdLen), u32(cdStart), u16(0)));
+    var all = parts.concat(central, [end]), total = 0;
+    all.forEach(function (a) { total += a.length; });
+    var out = new Uint8Array(total), o = 0;
+    all.forEach(function (a) { out.set(a, o); o += a.length; });
+    return out;
+  }
+  function xlsx(sheetName, headers, rows, types) {
+    var esc = function (s) {
+      return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    };
+    var colRef = function (c) { var s = ""; c++; while (c) { var m = (c - 1) % 26; s = String.fromCharCode(65 + m) + s; c = (c - m - 1) / 26; } return s; };
+    var cell = function (r, c, v, t) {
+      if (v == null || v === "") return "";
+      var ref = colRef(c) + r;
+      if (t === "n" && v !== "" && !isNaN(v)) return '<c r="' + ref + '"><v>' + v + "</v></c>";
+      return '<c r="' + ref + '" t="inlineStr"><is><t xml:space="preserve">' + esc(v) + "</t></is></c>";
+    };
+    var body = '<row r="1">' + headers.map(function (h, c) { return cell(1, c, h, "s"); }).join("") + "</row>";
+    rows.forEach(function (row, ri) {
+      body += '<row r="' + (ri + 2) + '">' +
+        row.map(function (v, c) { return cell(ri + 2, c, v, types[c] || "s"); }).join("") + "</row>";
+    });
+    var files = [
+      { name: "[Content_Types].xml", data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>' },
+      { name: "_rels/.rels", data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>' },
+      { name: "xl/workbook.xml", data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="' + esc(sheetName) + '" sheetId="1" r:id="rId1"/></sheets></workbook>' },
+      { name: "xl/_rels/workbook.xml.rels", data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>' },
+      { name: "xl/worksheets/sheet1.xml", data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>' + body + "</sheetData></worksheet>" }
+    ];
+    return new Blob([zipStore(files)], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
   }
 
   function exportOrderCsv() {
     var pns = Object.keys(cart).filter(function (pn) { return cart[pn].qty > 0; });
     if (!pns.length) { toast("Заказ пуст"); return; }
     var serial = $("#serial").value.trim();
-    var rows = [csvRow(["Номер детали", "Наименование", "Взаимозам. артикул", "Цена, " + CURRENCY,
-      "Кол-во", "Сумма, " + CURRENCY, "Группа"])];
-    var total = 0;
+    var headers = ["Номер детали", "Наименование", "Взаимозам. артикул", "Цена, " + CURRENCY,
+      "Кол-во", "Сумма, " + CURRENCY, "Группа"];
+    var types = ["s", "s", "s", "n", "n", "n", "s"];
+    var rows = [], total = 0;
     pns.forEach(function (pn) {
       var it = cart[pn], pr = priceOf(pn) || {};
       var each = pr.p != null ? pr.p : null;
       var sum = each != null ? each * it.qty : null;
       if (sum != null) total += sum;
-      rows.push(csvRow([xltext(pn), pr.n || it.en || it.zh || "", xltext(pr.x || ""),
-        each != null ? each : "", it.qty, sum != null ? Math.round(sum * 100) / 100 : "", pr.g || ""]));
+      rows.push([pn, pr.n || it.en || it.zh || "", pr.x || "",
+        each != null ? each : "", it.qty, sum != null ? Math.round(sum * 100) / 100 : "", pr.g || ""]);
     });
-    rows.push(csvRow(["", "", "", "", "ИТОГО", Math.round(total * 100) / 100, ""]));
-    var head = "Заказ-спецификация NTE240" + (serial ? " · машина " + serial : "") +
-      " · " + new Date().toLocaleDateString("ru-RU") + "\n";
-    download("NTE240_заказ.csv", head + rows.join("\n"));
+    rows.push(["", "", "", "", "ИТОГО", Math.round(total * 100) / 100, ""]);
+    var name = "NTE240_заказ" + (serial ? "_" + serial : "") + ".xlsx";
+    downloadBlob(name, xlsx("Заказ", headers, rows, types));
   }
 
   function exportAllNumbers() {
-    var rows = [csvRow(["Артикул (Part No.)", "Наименование (RU)", "Description (EN)", "Описание (ZH)",
-      "Цена, " + CURRENCY, "Группа", "Взаимозаменяемый артикул", "Разделы"])];
+    var headers = ["Артикул (Part No.)", "Наименование (RU)", "Description (EN)", "Описание (ZH)",
+      "Цена, " + CURRENCY, "Группа", "Взаимозаменяемый артикул", "Разделы"];
+    var types = ["s", "s", "s", "s", "n", "s", "s", "s"];
     var uniq = {};
     CAT.sections.forEach(function (s) {
       sectionParts(s).forEach(function (p) {
@@ -442,13 +499,13 @@
         if (!u.zh && p.zh) u.zh = p.zh;
       });
     });
-    Object.keys(uniq).sort().forEach(function (pn) {
+    var rows = Object.keys(uniq).sort().map(function (pn) {
       var u = uniq[pn], pr = priceOf(pn) || {};
-      rows.push(csvRow([xltext(pn), pr.n || "", u.en, u.zh, pr.p != null ? pr.p : "", pr.g || "", xltext(pr.x || ""),
-        Object.keys(u.secs).sort().join(" ")]));
+      return [pn, pr.n || "", u.en, u.zh, pr.p != null ? pr.p : "", pr.g || "", pr.x || "",
+        Object.keys(u.secs).sort().join(" ")];
     });
-    download("NTE240_все_номера.csv", rows.join("\n"));
-    toast("Экспортировано номеров: " + Object.keys(uniq).length);
+    downloadBlob("NTE240_все_номера.xlsx", xlsx("Номера", headers, rows, types));
+    toast("Экспортировано номеров: " + rows.length);
   }
 
   function printOrder() {
