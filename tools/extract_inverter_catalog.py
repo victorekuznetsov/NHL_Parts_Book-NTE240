@@ -92,14 +92,35 @@ def _split_name(lines):
     return " ".join(zh_parts).strip(), " ".join(en_parts).strip()
 
 
+def _is_naa(s):
+    """A ``#N/A`` placeholder — a real listed position with no catalog number."""
+    return bool(re.fullmatch(r"#?N/?A", s))
+
+
 def _is_pn(s):
-    return bool(PN_RE.match(s)) and not DATE_RE.match(s) and not s.startswith("PM")
+    # NB: do NOT reject date-shaped tokens here — many real catalog numbers
+    # (20040401, 20040502, …) are valid YYYYMMDD dates. The only date in the
+    # source is the header revision date, which never sits in a REF/QTY row
+    # context, so context (not value) is what keeps it out of the parts list.
+    return bool(PN_RE.match(s)) and not s.startswith("PM")
+
+
+def _qty_at(lines, i):
+    """(qty, tokens_consumed) at line i. QTY is a count or "AR"; the .doc export
+    sometimes splits "AR" across two lines ("A" then "R")."""
+    if i < len(lines) and QTY_RE.match(lines[i]):
+        return lines[i], 1
+    if i + 1 < len(lines) and lines[i] == "A" and lines[i + 1] == "R":
+        return "AR", 2
+    return None, 0
 
 
 def _nc_letter(lines, i):
     """A lone note letter (注/NC) sits between REF and QTY on some rows; consume
-    it only when a QTY or PART-NO follows, so a name word is never eaten."""
+    it only when a QTY or PART-NO follows, so neither a name word nor the first
+    half of a split "A R" quantity is eaten."""
     return (i < len(lines) and re.fullmatch(r"[A-Z]", lines[i]) and i + 1 < len(lines)
+            and lines[i + 1] != "R"
             and (QTY_RE.match(lines[i + 1]) or _is_pn(lines[i + 1])))
 
 
@@ -113,11 +134,12 @@ def _row_start(lines, k):
     i = k + 1
     if _nc_letter(lines, i):
         i += 1
-    nxt = lines[i]
-    if QTY_RE.match(nxt):
-        after = lines[i + 1] if i + 1 < len(lines) else ""
-        return _is_pn(after) or bool(CJK.search(after))   # PART-NO or kit sub-name
-    return _is_pn(nxt)                                     # REF then PART-NO (qty blank)
+    q, c = _qty_at(lines, i)
+    if q is not None:
+        after = lines[i + c] if i + c < len(lines) else ""
+        # PART-NO, a kit sub-name, or a #N/A placeholder position
+        return _is_pn(after) or _is_naa(after) or bool(CJK.search(after))
+    return i < len(lines) and _is_pn(lines[i])            # REF then PART-NO (qty blank)
 
 
 def parse_table(page):
@@ -136,21 +158,22 @@ def parse_table(page):
         if _nc_letter(lines, i):
             nc = lines[i]
             i += 1
-        qty = ""
-        if i < n and QTY_RE.match(lines[i]):
-            qty = lines[i]
-            i += 1
+        qty, c = _qty_at(lines, i)
+        qty = qty or ""
+        i += c
         pn = ""
         if i < n and _is_pn(lines[i]):
             pn = lines[i]
             i += 1
+        elif i < n and _is_naa(lines[i]):
+            i += 1                         # #N/A placeholder position, no number
         # the name runs to the next row start; scanning from *after* the
         # consumed REF/QTY/PART-NO so a row's own QTY line is never mistaken for
         # the REF of a phantom row
         j = i
         while j < n and not (lines[j] and _row_start(lines, j)):
             j += 1
-        zh, en = _split_name([l for l in lines[i:j] if l])
+        zh, en = _split_name([l for l in lines[i:j] if l and not _is_naa(l)])
         parts.append({"nc": nc, "ref": ref, "qty": qty, "pn": pn,
                       "zh": zh, "en": en, "lvl": 0})
         k = j
@@ -235,30 +258,35 @@ def main():
     sections = [s for s in sections
                 if sum(len(e[4]) for e in s["pages"] if e[0] == "T") > 0]
 
+    # Each figure (a drawing set + its own 1..N position list) becomes its own
+    # section — the driving-system book prints the same subsystem in several
+    # independent configurations, and merging them under one section would put
+    # unrelated position lists (each restarting at 1) behind one entry. When a
+    # subsystem yields more than one figure the sections are numbered · 1, · 2 …
     out_sections = []
     total_parts = 0
-    for n, s in enumerate(sections, 1):
-        code = "%s-%04d" % (CHAPTER, n * 10)
-        figures = []
-        img_n = 0
-        for fig in group_figures(s["pages"]):
+    n = 0
+    for s in sections:
+        figs = [f for f in group_figures(s["pages"]) if f["draw"] or f["parts"]]
+        multi = len(figs) > 1
+        for vi, fig in enumerate(figs, 1):
+            n += 1
+            code = "%s-%04d" % (CHAPTER, n * 10)
             images = []
-            for pno in fig["draw"]:
-                img_n += 1
+            for img_i, pno in enumerate(fig["draw"], 1):
                 pix = doc[pno].get_pixmap(matrix=fitz.Matrix(RENDER_SCALE, RENDER_SCALE))
-                fname = "%s-%d.jpg" % (code, img_n)
+                fname = "%s-%d.jpg" % (code, img_i)
                 pix.save(os.path.join(OUT_DRAW, fname), jpg_quality=JPEG_QUALITY)
                 images.append("drawings/" + fname)
-            figures.append({"images": images, "parts": fig["parts"]})
+            zh = s["zh"] + ("（вар. %d）" % vi if multi else "")
+            en = s["en"] + (" · %d" % vi if multi else "")
+            out_sections.append({
+                "code": code, "chapter": CHAPTER, "zh": zh, "en": en,
+                "figures": [{"images": images, "parts": fig["parts"]}],
+            })
             total_parts += len(fig["parts"])
-        figures = [f for f in figures if f["images"] or f["parts"]]
-        out_sections.append({
-            "code": code, "chapter": CHAPTER,
-            "zh": s["zh"], "en": s["en"], "figures": figures,
-        })
-        np = sum(len(f["parts"]) for f in figures)
-        print("  %-9s %-34s figures=%d draws=%d parts=%d" %
-              (code, s["en"][:32], len(figures), img_n, np))
+            print("  %-9s %-34s draws=%d parts=%d" %
+                  (code, en[:32], len(images), len(fig["parts"])))
 
     # ---- merge into the existing catalog ----
     raw = open(DATA_JS, encoding="utf-8").read()
@@ -281,10 +309,12 @@ def main():
     for i in range(doc.page_count):
         lines = [l.strip() for l in doc[i].get_text().splitlines()]
         for j, ln in enumerate(lines):
-            if PN_RE.match(ln) and not DATE_RE.match(ln) and not ln.startswith("PM"):
-                # a real part number sits after a QTY/REF, not in a title line
-                if j >= 2 and (QTY_RE.match(lines[j - 1]) or REF_RE.match(lines[j - 1])):
-                    printed.add(ln)
+            # a real part number sits after a QTY (数量) line (a count, "AR", or a
+            # split "A"/"R"); the header revision date is preceded by a revision
+            # letter, so context — not the date-shaped value — separates them
+            if _is_pn(ln) and j >= 1 and (QTY_RE.match(lines[j - 1]) or
+                                          (lines[j - 1] == "R" and j >= 2 and lines[j - 2] == "A")):
+                printed.add(ln)
     captured = {p["pn"] for s in out_sections for f in s["figures"] for p in f["parts"] if p["pn"]}
     missing = printed - captured
     print("\nInverter sections: %d  parts: %d  drawings: %d" %

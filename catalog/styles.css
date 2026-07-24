@@ -29,7 +29,7 @@
 html { overflow-anchor: none; }   /* stop async drawing loads from shifting scroll */
 body {
   margin: 0;
-  font: 14px/1.45 -apple-system, "Segoe UI", Roboto, "Noto Sans SC", "Microsoft YaHei", Arial, sans-serif;
+  font: 14px/1.45 Calibri, "Segoe UI", -apple-system, Roboto, "Noto Sans SC", "Microsoft YaHei", Arial, sans-serif;
   color: var(--ink);
   background: var(--bg);
 }
@@ -37,20 +37,19 @@ a { color: var(--accent-ink); text-decoration: none; }
 a:hover { text-decoration: underline; }
 button { font-family: inherit; cursor: pointer; }
 
-/* -------- pinned top contact bar -------- */
+/* -------- pinned top contact bar (Развитие: charcoal + mint) -------- */
 .contact-bar {
-  height: var(--contact-h);
+  min-height: var(--contact-h);
   background: var(--ink);
-  color: #cfd4d9;
-  display: flex; align-items: center; gap: 18px;
-  padding: 0 16px; font-size: 12.5px;
-  position: sticky; top: 0; z-index: 60;
+  color: #d3d8dd;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  flex-wrap: wrap;
+  padding: 7px 16px; font-size: 12.5px; text-align: center;
+  border-bottom: 2px solid var(--accent);
 }
-.contact-bar .brand { color: #fff; font-weight: 700; letter-spacing: .3px; }
-.contact-bar .brand b { color: var(--accent); }
-.contact-bar .spacer { flex: 1; }
-.contact-bar a { color: #cfd4d9; }
-.contact-bar a:hover { color: #fff; text-decoration: none; }
+.contact-bar .ctext { color: #d3d8dd; }
+.contact-bar .cmail { color: var(--accent); font-weight: 700; }
+.contact-bar .cmail:hover { color: #fff; text-decoration: none; }
 
 /* -------- header -------- */
 header.app {
@@ -59,14 +58,16 @@ header.app {
   border-bottom: 1px solid var(--line);
   display: flex; align-items: center; gap: 16px;
   padding: 0 16px;
-  position: sticky; top: var(--contact-h); z-index: 55;
+  position: sticky; top: 0; z-index: 55;
 }
 .logo { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .logo .mark {
-  width: 34px; height: 34px; border-radius: 8px; flex: none;
-  background: var(--accent); color: var(--on-accent);
-  display: grid; place-items: center; font-weight: 800; font-size: 12px;
+  width: 40px; height: 40px; border-radius: 9px; flex: none;
+  background: var(--ink);
+  display: grid; place-items: center;
 }
+.logo .mark svg { display: block; }
+.logo .mark svg path { fill: var(--accent); }
 .logo .title { min-width: 0; }
 .logo .title .t1 { font-weight: 700; font-size: 15px; white-space: nowrap; }
 .logo .title .t2 { color: var(--muted); font-size: 11.5px; white-space: nowrap; }
@@ -99,8 +100,8 @@ header.app {
 .layout { display: flex; align-items: flex-start; }
 nav.sidebar {
   width: var(--sidebar-w); flex: none;
-  position: sticky; top: calc(var(--contact-h) + var(--header-h));
-  height: calc(100vh - var(--contact-h) - var(--header-h));
+  position: sticky; top: var(--header-h);
+  height: calc(100vh - var(--header-h));
   overflow-y: auto; background: var(--surface);
   border-right: 1px solid var(--line); padding: 8px 0;
 }
@@ -149,7 +150,7 @@ main.content { flex: 1; min-width: 0; padding: 22px 26px 80px; }
 .drawing-wrap {
   width: 46%; flex: none; align-self: stretch;
   border-right: 1px solid var(--line); background: #fbfcfc;
-  position: sticky; top: calc(var(--contact-h) + var(--header-h) + 8px);
+  position: sticky; top: calc(var(--header-h) + 8px);
 }
 .carousel { padding: 12px; }
 .carousel .stage {
@@ -279,7 +280,7 @@ aside.cart.open { transform: none; }
 
 /* -------- responsive -------- */
 @media (max-width: 900px) {
-  nav.sidebar { position: fixed; left: 0; top: calc(var(--contact-h) + var(--header-h));
+  nav.sidebar { position: fixed; left: 0; top: var(--header-h);
     z-index: 50; transform: translateX(-100%); transition: transform .2s; box-shadow: var(--shadow); }
   nav.sidebar.open { transform: none; }
   .menu-btn { display: inline-grid !important; }
