@@ -128,6 +128,13 @@ def main():
                 if not u["zh"] and p["zh"]:
                     u["zh"] = p["zh"]
 
+    # Catalog numbers keep leading zeros (00106267). Excel strips them when it
+    # auto-types the column as numeric on open, so write them as an ="…" text
+    # formula, which Excel reads as text on a plain double-click open.
+    def xl(v):
+        v = "" if v is None else str(v)
+        return '="%s"' % v.replace('"', '""') if v else ""
+
     with open(CSV_OUT, "w", encoding="utf-8-sig", newline="") as fh:
         w = csv.writer(fh)
         w.writerow(["Артикул (Part No.)", "Наименование (RU)", "Description (EN)",
@@ -136,9 +143,9 @@ def main():
         for pn in sorted(uniq):
             u = uniq[pn]
             pr = prices.get(pn, {})
-            w.writerow([pn, pr.get("n", ""), u["en"], u["zh"],
+            w.writerow([xl(pn), pr.get("n", ""), u["en"], u["zh"],
                         ("" if pr.get("p") is None else pr.get("p")),
-                        pr.get("g", ""), pr.get("x", ""),
+                        pr.get("g", ""), xl(pr.get("x", "")),
                         "/".join(sorted(u["src"])), " ".join(sorted(u["secs"]))])
 
     print("Price rows loaded: %d" % len(prices))

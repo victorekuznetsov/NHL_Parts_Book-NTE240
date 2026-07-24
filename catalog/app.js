@@ -400,6 +400,13 @@
     return /[",;\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
   }
   function csvRow(arr) { return arr.map(csvCell).join(";"); }
+  // Catalog numbers keep leading zeros (00106267, 09014080). Excel would strip
+  // them by auto-typing the column as a number, so emit them as an ="…" text
+  // formula — Excel then treats the cell as text on a plain double-click open.
+  function xltext(v) {
+    v = v == null ? "" : String(v);
+    return v ? '="' + v.replace(/"/g, '""') + '"' : "";
+  }
 
   function exportOrderCsv() {
     var pns = Object.keys(cart).filter(function (pn) { return cart[pn].qty > 0; });
@@ -413,7 +420,7 @@
       var each = pr.p != null ? pr.p : null;
       var sum = each != null ? each * it.qty : null;
       if (sum != null) total += sum;
-      rows.push(csvRow([pn, pr.n || it.en || it.zh || "", pr.x || "",
+      rows.push(csvRow([xltext(pn), pr.n || it.en || it.zh || "", xltext(pr.x || ""),
         each != null ? each : "", it.qty, sum != null ? Math.round(sum * 100) / 100 : "", pr.g || ""]));
     });
     rows.push(csvRow(["", "", "", "", "ИТОГО", Math.round(total * 100) / 100, ""]));
@@ -437,7 +444,7 @@
     });
     Object.keys(uniq).sort().forEach(function (pn) {
       var u = uniq[pn], pr = priceOf(pn) || {};
-      rows.push(csvRow([pn, pr.n || "", u.en, u.zh, pr.p != null ? pr.p : "", pr.g || "", pr.x || "",
+      rows.push(csvRow([xltext(pn), pr.n || "", u.en, u.zh, pr.p != null ? pr.p : "", pr.g || "", xltext(pr.x || ""),
         Object.keys(u.secs).sort().join(" ")]));
     });
     download("NTE240_все_номера.csv", rows.join("\n"));
