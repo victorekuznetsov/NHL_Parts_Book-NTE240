@@ -355,79 +355,78 @@ def main():
     doc = fitz.open(pdf)
     os.makedirs(OUT_DRAW, exist_ok=True)
 
-    # classify pages and group by section, keeping document order.
-    # A page's section is the header code printed on it; continuation pages
-    # that print no code inherit the current section (do NOT drop them).
-    sections = []  # list of dicts
-    current = None
+    # Classify each page, then assign parts to sections in document order.
+    #
+    # Critical to this book: a parts-TABLE page's own title block is unreliable —
+    # it prints the code of the *following* section, not the parts on it (e.g.
+    # the dump-body liner rows 001–010 sit on a page stamped "100-0180", and
+    # weight-system row 071 sits on a page stamped "100-0160"). Only DRAWING
+    # sheets and section-TITLE sheets name their section correctly. So section
+    # identity is taken solely from those non-table pages, and every table's
+    # rows are attributed to the most recent such section — never to the code
+    # printed on the table page itself.
+    #
+    # Page kinds: an embedded illustration -> "D" (drawing, rendered; never holds
+    # table rows here). An image-free page with parseable rows -> "T" (table,
+    # possibly a continuation that omits the repeated header). An image-free page
+    # with a section code but no rows -> "H" (section-title sheet: sets the
+    # section, nothing to render). Anything else is front matter and skipped.
+    entries = []
     for i in range(doc.page_count):
         page = doc[i]
-        txt = page.get_text()
-        code, zh, en = parse_header(page)
-        if code is None:
-            if current is None:
-                continue  # front-matter / TOC page, before any section
-            code, zh, en = current["code"], "", ""
-        # Classify for layout. A page that carries an embedded illustration is a
-        # drawing to render — in this book such pages never hold parts-table rows
-        # (every catalog number sits on an image-free page), so they are not
-        # parsed, which keeps drawing title-block IDs out of the parts list.
-        # An image-free page that yields part rows is a (continuation) table —
-        # parsed even when it omits the repeated column header; anything else is
-        # a blank/vector sheet, rendered as a drawing.
         if page.get_images():
-            kind, parsed = "D", []
+            code, zh, en = parse_header(page)
+            entries.append(("D", i, code, zh, en, []))
         else:
             parsed = parse_parts(page)
-            kind = "T" if parsed else "D"
-
-        if current is None or current["code"] != code:
-            current = {"code": code, "zh": zh, "en": en, "pages": []}
-            sections.append(current)
-        else:
-            if not current["zh"] and zh:
-                current["zh"] = zh
-            if not current["en"] and en:
-                current["en"] = en
-        current["pages"].append((kind, i, parsed))
-
-    # A "figure" is a run of drawing pages followed by its parts-table pages
-    # (pattern D..T..). Interleaved sections (D T D T) thus split into several
-    # figures, each pairing a drawing with exactly the positions listed for it.
-    def group_figures(pages):
-        """Pair each drawing with its position list. A figure is a run of
-        drawing pages plus the table pages that surround them: table rows that
-        appear *before* a section's drawing (this book orders D/T inconsistently)
-        attach to that drawing, and a new figure only starts once the current
-        one has both a drawing and its following table — so genuinely
-        interleaved ``D T D T`` sections still split one drawing per list. A
-        section with no drawing at all yields a single parts-only figure."""
-        figs, cur, pending = [], None, []
-        for kind, pno, parsed in pages:
-            if kind == "D":
-                if cur is None or cur["seen_tab"]:
-                    cur = {"draw": [], "parts": pending, "seen_tab": False}
-                    pending = []
-                    figs.append(cur)
-                cur["draw"].append(pno)
+            if parsed:
+                entries.append(("T", i, None, "", "", parsed))
             else:
-                if cur is None:
-                    pending.extend(parsed)      # tables before this section's drawing
-                else:
-                    cur["parts"].extend(parsed)
-                    cur["seen_tab"] = True
-        if pending:
-            figs.append({"draw": [], "parts": pending, "seen_tab": True})
-        return figs
+                code, zh, en = parse_header(page)
+                if code:
+                    entries.append(("H", i, code, zh, en, []))
+
+    sections = []
+    cur_sec = cur_fig = None
+    for kind, pno, code, zh, en, parsed in entries:
+        if kind == "T":
+            if cur_sec is None:
+                continue  # a table before any section (front matter) — unexpected
+            if cur_fig is None:
+                cur_fig = {"draw": [], "parts": [], "seen_tab": False}
+                cur_sec["figures"].append(cur_fig)
+            cur_fig["parts"].extend(parsed)
+            cur_fig["seen_tab"] = True
+            continue
+        # kind D or H: a page that names its own section reliably
+        c = code or (cur_sec["code"] if cur_sec else None)
+        if c is None:
+            continue  # front matter before any coded section
+        if cur_sec is None or cur_sec["code"] != c:
+            cur_sec = {"code": c, "chapter": c[:3], "zh": zh, "en": en, "figures": []}
+            sections.append(cur_sec)
+            cur_fig = None
+        else:
+            if not cur_sec["zh"] and zh:
+                cur_sec["zh"] = zh
+            if not cur_sec["en"] and en:
+                cur_sec["en"] = en
+        if kind == "D":
+            # a new drawing after a completed figure (drawing + its table) starts
+            # a new figure; consecutive drawings with no table between them share
+            # one figure (a multi-sheet illustration -> carousel)
+            if cur_fig is None or cur_fig["seen_tab"]:
+                cur_fig = {"draw": [], "parts": [], "seen_tab": False}
+                cur_sec["figures"].append(cur_fig)
+            cur_fig["draw"].append(pno)
 
     out_sections = []
     total_parts = 0
     for s in sections:
         code = s["code"]
-        chapter = code[:3]
         figures = []
         img_n = 0
-        for fig in group_figures(s["pages"]):
+        for fig in s["figures"]:
             images = []
             for pno in fig["draw"]:
                 img_n += 1
@@ -441,7 +440,7 @@ def main():
         # drop empty figures that carry neither a drawing nor a part
         figures = [f for f in figures if f["images"] or f["parts"]]
         out_sections.append({
-            "code": code, "chapter": chapter, "zh": s["zh"], "en": s["en"],
+            "code": code, "chapter": s["chapter"], "zh": s["zh"], "en": s["en"],
             "figures": figures,
         })
         np = sum(len(f["parts"]) for f in figures)
