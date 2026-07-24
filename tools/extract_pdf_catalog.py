@@ -210,7 +210,7 @@ def _parse_side(words, side, anchors, body_top):
     to its left and the ZH/EN names to its right. Robust to columns that are
     shifted relative to their header labels."""
     amap = dict(anchors)
-    ref_a, qty_a, pn_a = amap.get("ref"), amap.get("qty"), amap.get("pn")
+    nc_a, ref_a, qty_a, pn_a = amap.get("nc"), amap.get("ref"), amap.get("qty"), amap.get("pn")
     ws = [w for w in words if (w[0] < 431 if side == "L" else w[0] >= 431)]
     ws = [w for w in ws if w[1] > body_top and w[4] not in _HDR_TOKENS]
 
@@ -247,23 +247,38 @@ def _parse_side(words, side, anchors, body_top):
 
         left = [w for w in toks if w[0] < pn_w[0]]
         right = [w for w in toks if w[0] > pn_w[0]]
-        # REF is a 1-3 digit; QTY is a count or the marker "AR" (As Required)
+        # REF (序号) is the drawing position; QTY (数量) is the count. Both sit in
+        # the NC/REF/QTY block left of the part number. Data columns often sit a
+        # dozen-plus px LEFT of their own header labels, so a raw nearest-anchor
+        # test picks the wrong column and swaps position with quantity. Correct
+        # the drift with the part number's own offset from the PART-NO anchor,
+        # then match each number to the nearest *shifted* anchor.
         nums = [w for w in left if re.fullmatch(r"\d{1,4}", w[4])]
+        shift = (pn_a - pn_w[0]) if pn_a is not None else 0
+
+        def _d(x, a):
+            return abs(x - (a - shift)) if a is not None else 1e9
+
         ref = qty = ""
         if len(nums) >= 2:
-            ref = min(nums, key=lambda w: abs(w[0] - (ref_a or nums[0][0])))[4]
-            qty = nums[-1][4]
-            if nums[-1][4] == ref and len(nums) >= 2:
-                qty = nums[-2][4]
-        elif len(nums) == 1:
-            # single count: decide REF vs QTY by which column it sits under
-            if ref_a is not None and qty_a is not None:
-                if abs(nums[0][0] - qty_a) < abs(nums[0][0] - ref_a):
-                    qty = nums[0][4]
-                else:
-                    ref = nums[0][4]
+            ref_w = min(nums, key=lambda w: _d(w[0], ref_a))
+            qty_w = min(nums, key=lambda w: _d(w[0], qty_a))
+            if ref_w is qty_w:
+                # anchors could not separate them — fall back to left-to-right
+                # order (NC REF QTY): drop a leading NC note number if present
+                ordered = sorted(nums, key=lambda w: w[0])
+                if len(ordered) >= 3 and nc_a is not None and \
+                        _d(ordered[0][0], nc_a) < _d(ordered[0][0], ref_a):
+                    ordered = ordered[1:]
+                ref, qty = ordered[0][4], ordered[1][4]
             else:
+                ref, qty = ref_w[4], qty_w[4]
+        elif len(nums) == 1:
+            # a lone count is the position (REF) unless it clearly sits under QTY
+            if _d(nums[0][0], ref_a) <= _d(nums[0][0], qty_a):
                 ref = nums[0][4]
+            else:
+                qty = nums[0][4]
         if not qty:
             ar = [w for w in left if re.fullmatch(r"AR|A/R", w[4])]
             if ar:
