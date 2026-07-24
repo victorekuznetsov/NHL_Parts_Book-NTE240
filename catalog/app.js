@@ -194,7 +194,26 @@
     return dw;
   }
 
+  // order rows by position number (№). Rows without their own number inherit
+  // the previous position so kit sub-items / wrapped names stay under their
+  // parent; ties keep the original book order.
+  function sortByPos(parts) {
+    var last = -1;
+    var keyed = parts.map(function (p, i) {
+      var m = /^(\d+)/.exec(p.ref || "");
+      var own = m ? parseInt(m[1], 10) : null;
+      if (own !== null) last = own;
+      return { p: p, i: i, n: own !== null ? own : last, refless: own === null ? 1 : 0, s: p.ref || "" };
+    });
+    keyed.sort(function (a, b) {
+      return (a.n - b.n) || (a.refless - b.refless) ||
+        (a.s < b.s ? -1 : a.s > b.s ? 1 : 0) || (a.i - b.i);
+    });
+    return keyed.map(function (k) { return k.p; });
+  }
+
   function renderParts(parts) {
+    parts = sortByPos(parts);
     var pw = el("div", "parts-wrap");
     var table = el("table", "parts");
     table.innerHTML =

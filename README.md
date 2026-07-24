@@ -28,6 +28,7 @@
 | Файл | Назначение |
 |------|------------|
 | `NTE240 Part Book-Polyus.zip.001` | Заводской каталог запчастей (PDF, split-zip, deflate64) |
+| `NHL240Invertex2驱动系统备件手册.doc.pdf` | Каталог системы привода / инвертора (глава 600) |
 | `Прайс-лист ГЕ на согласование июль 2026.xlsx` | Прайс-лист (Артикул → цена, группа, взаимозам., RU-наименование) |
 | `Развитие шаблон.pptx` | Шаблон бренда (палитра каталога взята отсюда) |
 
@@ -40,10 +41,13 @@ pip install pymupdf openpyxl playwright
 python3 tools/extract_pdf_catalog.py            # -> catalog/data/parts.js + catalog/drawings/
 #    (или указать путь к готовому PDF: python3 tools/extract_pdf_catalog.py path/to.pdf)
 
-# 2. цены и аналитика из прайса
+# 2. добавить главу «Инвертор / система привода» (линейный парсер .doc→PDF)
+python3 tools/extract_inverter_catalog.py       # дополняет parts.js главой 600 + рисунками
+
+# 3. цены и аналитика из прайса (после шагов 1–2, чтобы охватить все номера)
 python3 tools/extract_prices.py                 # -> catalog/data/prices.js + all_part_numbers.csv
 
-# 3. проверка полноты — должно быть 0 потерянных номеров
+# 4. проверка полноты — должно быть 0 потерянных номеров
 python3 tools/verify_completeness.py catalog/data/parts.js "NTE240 Part Book-Polyus.pdf"
 ```
 
