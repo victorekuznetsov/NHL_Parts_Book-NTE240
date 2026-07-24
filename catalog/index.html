@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NTE240 — Интерактивный каталог запасных частей</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="contact-bar">
+  <span class="brand">Горная Евразия <b>·</b> Каталог запчастей</span>
+  <span class="spacer"></span>
+  <a href="tel:+78001234567">+7 800 123-45-67</a>
+  <a href="mailto:parts@gorevrazia.ru">parts@gorevrazia.ru</a>
+</div>
+
+<header class="app">
+  <button class="menu-btn" id="menuBtn" aria-label="Меню">☰</button>
+  <div class="logo">
+    <div class="mark">NHL</div>
+    <div class="title">
+      <div class="t1">NTE240 · Каталог запчастей</div>
+      <div class="t2">NTE240 Mining Truck — Parts Book</div>
+    </div>
+  </div>
+  <div class="search">
+    <input id="search" type="search" placeholder="Поиск по номеру детали или названию…" autocomplete="off">
+    <span class="ico">⌕</span>
+  </div>
+  <span class="spacer"></span>
+  <button class="cart-btn" id="cartBtn">
+    <span>Заказ</span>
+    <span class="count" id="cartCount">0</span>
+  </button>
+</header>
+
+<div class="layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-tools">
+      <button id="exportAll">⬇ Экспорт всех номеров (CSV)</button>
+    </div>
+    <div id="chapters"></div>
+  </nav>
+  <main class="content" id="content"></main>
+</div>
+
+<!-- cart -->
+<div class="overlay" id="overlay"></div>
+<aside class="cart" id="cart">
+  <div class="cart-h">
+    <h2>Заказ-спецификация</h2>
+    <button class="close" id="cartClose" aria-label="Закрыть">×</button>
+  </div>
+  <div class="cart-serial">
+    <label for="serial">Заводской / серийный номер машины</label>
+    <input id="serial" type="text" placeholder="напр. NTE240A001">
+  </div>
+  <div class="cart-lines" id="cartLines"></div>
+  <div class="cart-foot">
+    <div class="total"><span>Итого</span><span id="cartTotal">0.00 CNY</span></div>
+    <div class="note" id="cartNote"></div>
+    <div class="acts">
+      <button class="btn primary" id="exportCsv">Экспорт CSV</button>
+      <button class="btn" id="printOrder">Печать</button>
+      <button class="btn ghost" id="clearCart">Очистить</button>
+    </div>
+  </div>
+</aside>
+
+<!-- lightbox -->
+<div class="lightbox" id="lightbox"><span class="x" id="lbClose">×</span><img id="lbImg" alt=""></div>
+<div class="toast" id="toast"></div>
+
+<script src="data/parts.js"></script>
+<script src="data/prices.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
