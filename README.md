@@ -28,6 +28,7 @@
 |------|------------|
 | `NTE240 Part Book-Polyus.zip.001` | Заводской каталог запчастей (PDF, split-zip, deflate64) |
 | `NHL240Invertex2驱动系统备件手册.doc.pdf` | Каталог системы привода / инвертора (глава 600) |
+| `QSK60.zip.001` / `.002` | Каталог двигателя Cummins QSK60 — PDF по опциям (глава 700) |
 | `Прайс-лист ГЕ на согласование июль 2026.xlsx` | Прайс-лист (Артикул → цена, группа, взаимозам., RU-наименование) |
 | `Развитие шаблон.pptx` | Шаблон бренда (палитра каталога взята отсюда) |
 
@@ -42,6 +43,9 @@ python3 tools/extract_pdf_catalog.py            # -> catalog/data/parts.js + cat
 
 # 2. добавить главу «Инвертор / система привода» (линейный парсер .doc→PDF)
 python3 tools/extract_inverter_catalog.py       # дополняет parts.js главой 600 + рисунками
+
+# 2b. добавить главу «Двигатель Cummins QSK60» (координатный парсер PDF-опций)
+python3 tools/extract_qsk60_catalog.py          # дополняет parts.js главой 700 + рисунками
 
 # 3. цены и аналитика из прайса (после шагов 1–2, чтобы охватить все номера)
 python3 tools/extract_prices.py                 # -> catalog/data/prices.js + all_part_numbers.csv
