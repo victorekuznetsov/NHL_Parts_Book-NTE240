@@ -84,6 +84,14 @@ header.app {
 .search .ico { position: absolute; right: 14px; top: 10px; color: var(--muted); }
 
 .spacer { flex: 1; }
+.manual-btn {
+  height: 38px; display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid var(--line-strong); background: var(--surface);
+  border-radius: 20px; padding: 0 16px; font-weight: 600; color: var(--ink);
+  font-size: 13px; white-space: nowrap; text-decoration: none;
+}
+.manual-btn:hover { border-color: var(--accent-strong); color: var(--accent-ink); text-decoration: none; }
+@media (max-width: 900px) { .manual-btn span, .manual-btn { font-size: 0; padding: 0 12px; } .manual-btn::before { content: "📘"; font-size: 16px; } }
 .cart-btn {
   height: 38px; border: 1px solid var(--line-strong); background: var(--surface);
   border-radius: 20px; padding: 0 16px; font-weight: 600; color: var(--ink);
