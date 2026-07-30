@@ -3,6 +3,20 @@
 Интерактивный веб-каталог запчастей для самосвала **NHL NTE240 Mining Truck**,
 построенный из заводского каталога (PDF) и прайс-листа (XLSX).
 
+## Структура репозитория
+
+```
+catalog/            ← ГОТОВЫЙ каталог. Самодостаточный: можно выгрузить ТОЛЬКО эту
+                      папку и открыть index.html — всё работает офлайн.
+tools/              скрипты извлечения (пересборка каталога из источников)
+sources/
+  active/           источники, из которых собран текущий каталог
+  archive/          неиспользуемые / более старые издания книг (в каталог не входят)
+skill/parts-catalog/  переносимый «скилл» — как собрать такой каталог для других книг
+```
+
+**Чтобы отдать заказчику / выгрузить из песочницы — берите только папку `catalog/`.**
+
 ## Открыть каталог
 
 Откройте `catalog/index.html` двойным щелчком — сервер и сборка не нужны.
@@ -28,40 +42,41 @@
   теме в руководстве (с автопоиском и ссылкой «вернуться в раздел»), из
   заголовков руководства — переход к соответствующей главе каталога.
 
-## Источники
+## Источники (`sources/active/` — из них собран каталог)
 
 | Файл | Назначение |
 |------|------------|
-| `NTE240 Part Book-Polyus.zip.001` | Заводской каталог запчастей (PDF, split-zip, deflate64) |
-| `NHL240Invertex2驱动系统备件手册.doc.pdf` | Каталог системы привода / инвертора (глава 600) |
-| `QSK60.zip.001` / `.002` | Каталог двигателя Cummins QSK60 — PDF по опциям (глава 700) |
+| `NTE240 Part Book-Polyus.zip.001` | Заводской каталог запчастей (PDF, split-zip, deflate64) → главы 020–210 |
+| `NHL240Invertex2驱动系统备件手册.doc.pdf` | Каталог системы привода / инвертора → глава 600 |
+| `QSK60.zip.001` / `.002` | Каталог двигателя Cummins QSK60 (PDF по опциям) → глава 700 |
 | `Прайс-лист ГЕ на согласование июль 2026.xlsx` | Прайс-лист (Артикул → цена, группа, взаимозам., RU-наименование) |
-| `Развитие шаблон.pptx` | Шаблон бренда (палитра каталога взята отсюда) |
+| `Руководство_оператора_NTE240_Полюс.docx` | Руководство по эксплуатации → `catalog/manual.html` |
+| `Развитие шаблон.pptx` | Шаблон бренда (палитра и логотип каталога) |
+
+`sources/archive/` — неиспользуемые/старые издания (NHL240 Drive System, NTE240AC
+Part Book 2019, NTE240_Parts_Book_Полюс): дубликаты или более старые версии тех же
+книг; в каталог не входят.
 
 ## Пересборка из исходников
 
+Скрипты сами находят источники в `sources/active/`.
+
 ```bash
-pip install pymupdf openpyxl playwright
+pip install pymupdf olefile openpyxl playwright
 
-# 1. данные + чертежи из PDF (реконструирует PDF из split-zip через unzip)
-python3 tools/extract_pdf_catalog.py            # -> catalog/data/parts.js + catalog/drawings/
-#    (или указать путь к готовому PDF: python3 tools/extract_pdf_catalog.py path/to.pdf)
+python3 tools/extract_pdf_catalog.py        # главы 020–210 -> parts.js + drawings/
+python3 tools/extract_inverter_catalog.py   # + глава 600 (линейный парсер .doc→PDF)
+python3 tools/extract_qsk60_catalog.py      # + глава 700 (координатный парсер PDF-опций)
+python3 tools/extract_manual.py             # руководство -> manual.html + manual_media/
+python3 tools/extract_prices.py             # цены (последним — чтобы охватить все главы)
 
-# 2. добавить главу «Инвертор / система привода» (линейный парсер .doc→PDF)
-python3 tools/extract_inverter_catalog.py       # дополняет parts.js главой 600 + рисунками
-
-# 2b. добавить главу «Двигатель Cummins QSK60» (координатный парсер PDF-опций)
-python3 tools/extract_qsk60_catalog.py          # дополняет parts.js главой 700 + рисунками
-
-# 2c. руководство оператора (.docx → листаемая страница с оглавлением и поиском)
-python3 tools/extract_manual.py                 # -> catalog/manual.html + catalog/manual_media/
-
-# 3. цены и аналитика из прайса (после шагов 1–2, чтобы охватить все номера)
-python3 tools/extract_prices.py                 # -> catalog/data/prices.js + all_part_numbers.csv
-
-# 4. проверка полноты — должно быть 0 потерянных номеров
-python3 tools/verify_completeness.py catalog/data/parts.js "NTE240 Part Book-Polyus.pdf"
+# проверка полноты по основной книге — «0 потерянных номеров»
+# (передайте распакованный PDF; extract_pdf_catalog.py распаковывает его во временную папку)
+python3 tools/verify_completeness.py catalog/data/parts.js "путь/к/NTE240 Part Book-Polyus.pdf"
 ```
+
+Извлекатели инвертора и QSK60 печатают собственную строку полноты
+(`printed vs captured`) — она обязана быть `missing: 0`.
 
 Проверка `verify_completeness.py` сверяет **каждый** номер детали, физически
 напечатанный в колонках источника, с извлечёнными данными по всему документу
@@ -80,3 +95,12 @@ python3 tools/verify_completeness.py catalog/data/parts.js "NTE240 Part Book-Pol
 ```
 
 `catalog/data/prices.js` — `window.PRICES = { "<артикул>": {p:цена, g:группа, x:взаимозам, n:RU-наименование} }`.
+
+## Скилл для других каталогов
+
+`skill/parts-catalog/` — переносимый набор (SKILL.md + `references/` + `scripts/`),
+описывающий весь конвейер и все разобранные подводные камни, чтобы собрать такой
+же интерактивный каталог для **других** книг/машин (другой двигатель, другая
+модель самосвала и т.п.). Внутри — отдельные памятки по каждому типу источника
+(координатный PDF, линейный .doc→PDF, русские PDF-опции Cummins, прайс-лист,
+руководство) и по устройству веб-приложения.
