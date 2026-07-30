@@ -43,6 +43,14 @@
   var chapterName = {};
   CAT.chapters.forEach(function (c) { chapterName[c.code] = c; });
 
+  // Cross-reference between the parts catalog and the operator/service manual:
+  // a chapter maps to a Russian topic keyword the manual is searched for.
+  var MANUAL_KW = {
+    "020": "рама", "030": "электр", "040": "двигатель", "050": "гидравл",
+    "070": "мост", "080": "тормоз", "090": "кабина", "100": "смазк",
+    "150": "шина", "210": "", "600": "инвертор", "700": "двигатель"
+  };
+
   // flatten a section's parts (single source of truth is figures[].parts)
   function sectionParts(s) {
     var out = [];
@@ -123,12 +131,16 @@
     var ch = chapterName[s.chapter] || { code: s.chapter, en: "" };
     var head = el("div", "sec-head");
     var count = sectionParts(s).filter(function (p) { return p.pn; }).length;
+    var kw = MANUAL_KW[s.chapter] || "";
+    var manualHref = "manual.html?from=" + encodeURIComponent(s.code) +
+      (kw ? "&q=" + encodeURIComponent(kw) : "");
     head.innerHTML =
       '<div class="crumb">' + esc(ch.code) + " · " + esc(ch.en || ch.zh || "") + "</div>" +
       "<h1>" + esc(s.code) + " " + esc(s.zh || "") +
       ' <span class="en">' + esc(s.en || "") + "</span></h1>" +
       '<div class="meta">' + (s.figures || []).length + " рис. · " +
-      count + " позиц. с номером детали</div>";
+      count + " позиц. с номером детали</div>" +
+      '<a class="xref-link" href="' + manualHref + '">📖 Открыть тему в руководстве по эксплуатации →</a>';
     content.appendChild(head);
 
     var figs = s.figures || [];
@@ -552,7 +564,14 @@
   // ---- routing ----------------------------------------------------------
   function route() {
     var h = location.hash || "";
-    if (h.indexOf("#/s/") === 0) {
+    if (h.indexOf("#/ch/") === 0) {
+      // deep link to a chapter (used by manual → catalog cross-references):
+      // open the chapter's first section and expand it in the sidebar
+      var chc = decodeURIComponent(h.slice(5));
+      var first = CAT.sections.filter(function (s) { return s.chapter === chc; })[0];
+      location.hash = first ? "#/s/" + first.code : "";
+      return;
+    } else if (h.indexOf("#/s/") === 0) {
       var code = decodeURIComponent(h.slice(4));
       highlightSidebar(code);
       renderSection(code);

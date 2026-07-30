@@ -37,6 +37,46 @@ def default_docx():
     return cand[0]
 
 
+# Reverse cross-reference: a manual heading that mentions a system links to the
+# matching catalog chapter. Order matters — most specific keyword first.
+MANUAL_TO_CHAPTER = [
+    ("тормоз", "080", "Тормозная система"),
+    ("кондицион", "090", "Кабина"), ("сиден", "090", "Кабина"),
+    ("зеркал", "090", "Кабина"), ("кабин", "090", "Кабина"),
+    ("рулев", "050", "Гидросистема / рулевое"), ("руль", "050", "Гидросистема / рулевое"),
+    ("гидравл", "050", "Гидросистема"),
+    ("шина", "150", "Шины и диски"), ("обод", "150", "Шины и диски"),
+    ("подвеск", "070", "Ходовая часть"), ("ступиц", "070", "Ходовая часть"),
+    ("мост", "070", "Ходовая часть"),
+    ("инвертор", "600", "Система привода (инвертор)"),
+    ("контактор", "600", "Система привода (инвертор)"),
+    ("электродвигател", "600", "Система привода (инвертор)"),
+    ("турбо", "700", "Двигатель Cummins QSK60"),
+    ("топлив", "700", "Двигатель Cummins QSK60"),
+    ("cummins", "700", "Двигатель Cummins QSK60"),
+    ("двигател", "700", "Двигатель Cummins QSK60"),
+    ("генератор", "600", "Система привода (генератор)"),
+    ("аккумулятор", "030", "Электрооборудование"),
+    ("реле", "030", "Электрооборудование"), ("датчик", "030", "Электрооборудование"),
+    ("фар", "030", "Электрооборудование"), ("свет", "030", "Электрооборудование"),
+    ("электр", "030", "Электрооборудование"),
+    ("смазк", "100", "Смазка / вспомогательные"),
+    ("огнетуш", "100", "Вспомогательные системы"),
+    ("взвешив", "100", "Вспомогательные системы"),
+    ("платформ", "020", "Несущие конструкции"), ("кузов", "020", "Несущие конструкции"),
+    ("лестниц", "020", "Несущие конструкции"), ("рама", "020", "Несущие конструкции"),
+]
+
+
+def catalog_link(heading):
+    low = heading.lower()
+    for kw, code, label in MANUAL_TO_CHAPTER:
+        if kw in low:
+            return ('<a class="cat-xref" href="index.html#/ch/%s">🔧 %s в каталоге →</a>'
+                    % (code, html.escape(label)))
+    return ""
+
+
 def para_text(p):
     return "".join(t.text or "" for t in p.iter(W + "t"))
 
@@ -106,7 +146,8 @@ def main():
                 hid += 1
                 lvl = 2 if style == "1" else 3
                 headings.append((lvl, "h%d" % hid, txt))
-                parts.append('<h%d id="h%d">%s</h%d>' % (lvl, hid, html.escape(txt), lvl))
+                parts.append('<h%d id="h%d">%s %s</h%d>'
+                             % (lvl, hid, html.escape(txt), catalog_link(txt), lvl))
             elif style in ("10", "20"):           # table-of-contents entries — skip
                 continue
             else:
@@ -159,6 +200,9 @@ main{flex:1;min-width:0;background:#fff;margin:16px;padding:26px 34px 80px;borde
 main h1{font-size:24px;margin:0 0 18px}
 main h2{font-size:20px;margin:30px 0 10px;padding-top:8px;border-top:2px solid var(--accent)}
 main h3{font-size:16px;margin:20px 0 8px;color:#333}
+.cat-xref{font-size:12px;font-weight:600;color:var(--accent-ink);text-decoration:none;
+  border:1px solid var(--line);border-radius:6px;padding:2px 8px;margin-left:8px;white-space:nowrap;vertical-align:middle}
+.cat-xref:hover{background:#f0fdf8;border-color:var(--accent)}
 main p{margin:8px 0}
 figure{margin:14px 0;text-align:center}
 figure img{max-width:100%;border:1px solid var(--line);border-radius:6px}
@@ -176,7 +220,7 @@ mark{background:#d6fbee}
 <div class="top">
   <span class="mark"><svg viewBox="0 0 196 196" width="26" height="26"><path d="M63.5941 165.078 114.786 64.5721 99.6758 31 83.5127 31 16 165.078 63.5941 165.078Z"/><path d="M107.608 118.291 152.342 118.291 179.684 64.5721 164.574 31 119.559 31 134.669 64.5721 107.608 118.291Z"/></svg></span>
   <div><div class="t1">Развитие · Руководство по эксплуатации и обслуживанию</div><div class="t2">{{TITLE}}</div></div>
-  <a class="back" href="index.html">← К каталогу запчастей</a>
+  <a class="back" id="backLink" href="index.html">← К каталогу запчастей</a>
 </div>
 <div class="wrap">
   <nav class="toc">{{TOC}}</nav>
@@ -191,15 +235,28 @@ mark{background:#d6fbee}
   var q=document.getElementById('q'), doc=document.getElementById('doc');
   var blocks=[].slice.call(doc.querySelectorAll('h2,h3,p,td'));
   var orig=blocks.map(function(b){return b.innerHTML;});
-  q.addEventListener('input',function(){
-    var v=q.value.trim();
+  function run(v){
+    var first=null;
     blocks.forEach(function(b,i){ b.innerHTML=orig[i]; });
-    if(v.length<2) return;
+    if(v.length<2) return null;
     var re=new RegExp('('+v.replace(/[.*+?^${}()|[\\]\\\\]/g,'\\\\$&')+')','gi');
     blocks.forEach(function(b,i){
-      if(re.test(b.textContent)) b.innerHTML=orig[i].replace(re,'<mark>$1</mark>');
+      if(re.test(b.textContent)){ b.innerHTML=orig[i].replace(re,'<mark>$1</mark>'); if(!first) first=b; }
     });
-  });
+    return first;
+  }
+  q.addEventListener('input',function(){ run(q.value.trim()); });
+  // deep-link support: ?q=<topic> pre-searches, ?from=<section> shows a
+  // "back to that catalog section" link for a clean round trip.
+  var params=new URLSearchParams(location.search);
+  var from=params.get('from');
+  if(from){
+    var bl=document.getElementById('backLink');
+    bl.textContent='← Вернуться в раздел каталога '+from;
+    bl.href='index.html#/s/'+encodeURIComponent(from);
+  }
+  var qp=params.get('q');
+  if(qp){ q.value=qp; var f=run(qp.trim()); if(f) f.scrollIntoView({block:'center'}); }
 })();
 </script>
 </body>

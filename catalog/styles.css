@@ -140,6 +140,12 @@ main.content { flex: 1; min-width: 0; padding: 22px 26px 80px; }
 .sec-head h1 { margin: 0; font-size: 22px; }
 .sec-head .en { color: var(--ink-soft); font-weight: 500; font-size: 15px; }
 .sec-head .meta { color: var(--muted); font-size: 12.5px; margin-top: 6px; }
+.sec-head .xref-link {
+  display: inline-flex; align-items: center; margin-top: 10px; padding: 6px 12px;
+  border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface);
+  font-size: 12.5px; font-weight: 600; color: var(--accent-ink); text-decoration: none;
+}
+.sec-head .xref-link:hover { border-color: var(--accent-strong); background: #f0fdf8; text-decoration: none; }
 
 .figure {
   background: var(--surface); border: 1px solid var(--line);
