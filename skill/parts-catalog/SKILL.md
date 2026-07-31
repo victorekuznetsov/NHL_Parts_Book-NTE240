@@ -65,7 +65,11 @@ time. This is not optional; most of the bundled code exists to hit that bar.
      option per file; columns by x-position; new chapter).
    - `scripts/extract_prices.py` — `.xlsx` price list → `window.PRICES` + a
      unique-numbers CSV/xlsx carrying every attribute.
-   - `scripts/extract_manual.py` — `.docx` service manual → browsable HTML.
+   - `scripts/extract_manual.py` — `.docx` operator manual → browsable HTML.
+   - `scripts/extract_service.py` — a **repair/service book** (folder of per-
+     section `.doc`/`.docx`, filenames carry the section code) → one repair page
+     **per catalog section**, linked both ways. Reads binary `.doc` directly
+     (olefile piece table + image scan).
    - **Read the matching file in `references/` first** — each lists the real
      failure modes (validated bugs) for that source shape.
 

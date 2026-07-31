@@ -134,13 +134,20 @@
     var kw = MANUAL_KW[s.chapter] || "";
     var manualHref = "manual.html?from=" + encodeURIComponent(s.code) +
       (kw ? "&q=" + encodeURIComponent(kw) : "");
+    var SERVICE = window.SERVICE || {};
+    var serviceLink = SERVICE[s.code]
+      ? '<a class="xref-link repair" href="service/' + encodeURIComponent(s.code) +
+        '.html">🔧 Инструкция по ремонту раздела →</a>'
+      : "";
     head.innerHTML =
       '<div class="crumb">' + esc(ch.code) + " · " + esc(ch.en || ch.zh || "") + "</div>" +
       "<h1>" + esc(s.code) + " " + esc(s.zh || "") +
       ' <span class="en">' + esc(s.en || "") + "</span></h1>" +
       '<div class="meta">' + (s.figures || []).length + " рис. · " +
       count + " позиц. с номером детали</div>" +
-      '<a class="xref-link" href="' + manualHref + '">📖 Открыть тему в руководстве по эксплуатации →</a>';
+      '<div class="xref-row">' + serviceLink +
+      '<a class="xref-link" href="' + manualHref + '">📖 Открыть тему в руководстве по эксплуатации →</a>' +
+      '</div>';
     content.appendChild(head);
 
     var figs = s.figures || [];
