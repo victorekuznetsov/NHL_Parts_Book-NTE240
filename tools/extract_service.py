@@ -193,6 +193,7 @@ def clean_paragraphs(text):
 PAGE = """<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{title} — Ремонт и обслуживание</title>
+<script src="../gate.js"></script>
 <style>
 :root{{--ink:#2a3138;--muted:#80868b;--line:#e2e5e8;--accent:#3ef0af;--accent-ink:#0b7d59;--bg:#eef0f2}}
 *{{box-sizing:border-box}}body{{margin:0;font:15px/1.6 Calibri,"Segoe UI",Arial,sans-serif;color:var(--ink);background:var(--bg)}}
@@ -299,7 +300,7 @@ def main():
     # index page grouped by chapter
     idx = ['<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8">',
            '<meta name="viewport" content="width=device-width, initial-scale=1">',
-           '<title>Инструкции по ремонту и обслуживанию</title>',
+           '<title>Инструкции по ремонту и обслуживанию</title>','<script src="gate.js"></script>',
            '<style>body{font:15px/1.6 Calibri,"Segoe UI",Arial,sans-serif;color:#2a3138;background:#eef0f2;margin:0}'
            '.top{background:#2a3138;color:#fff;padding:14px 20px;border-bottom:2px solid #3ef0af;display:flex;gap:16px;align-items:center}'
            '.top a{color:#3ef0af;text-decoration:none;margin-left:auto;font-weight:700}'

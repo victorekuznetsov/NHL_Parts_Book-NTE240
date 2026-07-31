@@ -182,6 +182,7 @@ MANUAL_TEMPLATE = """<!DOCTYPE html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{TITLE}} — Развитие</title>
+<script src="gate.js"></script>
 <style>
 :root{--ink:#2a3138;--muted:#80868b;--line:#e2e5e8;--accent:#3ef0af;--accent-ink:#0b7d59;--bg:#eef0f2}
 *{box-sizing:border-box}
