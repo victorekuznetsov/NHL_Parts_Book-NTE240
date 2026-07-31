@@ -101,6 +101,12 @@ the book has no `NNN-NNNN` codes of its own. Re-run `extract_prices.py` last so
 every book's numbers get matched to the price list. Order matters:
 `pdf → inverter → qsk60 → manual → prices`.
 
+**Name every section, don't show codes.** A book may store the descriptive name
+in the field the sidebar doesn't display first, so sections surface as bare
+option codes (`VC6715-02`) instead of names. Categorize with the `secName()`
+rule — see `references/categorization.md` — and confirm in the sidebar that
+every section reads as a name.
+
 ## Working style that fit this task
 - The user iterates by pointing a phone photo at one screen. Treat each as a
   concrete bug: reproduce that exact section, find the mechanism, **fix the
@@ -124,4 +130,9 @@ every book's numbers get matched to the price list. Order matters:
   x-position, vertically-centred multi-line names, cover vs table pages.
 - `references/price-list.md` — matching the `.xlsx`; leading-zero article export.
 - `references/manual.md` — `.docx` → browsable HTML + catalog cross-references.
+- `references/categorization.md` — the chapter→section tree and, critically, how
+  each section gets its **display name**: the `zh`/`en` slots differ per book, so
+  a section can show a bare option code instead of a name (QSK60 bug). The
+  `secName()` rule — a name has a space, a bare code does not — and how to
+  categorize a newly added book.
 - `references/webapp.md` — the web app: schema, UI, exports, cross-refs, gotchas.

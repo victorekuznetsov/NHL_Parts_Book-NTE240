@@ -31,6 +31,12 @@ whole-section list is needed. `window.PRICES` is
 `{ pn: {p:price, g:group, x:xref, n:ru_name} }`. Multiple books share one
 `window.CATALOG`, each as its own chapter (`020`…`210`, `600`, `700`, …).
 
+`zh`/`en` are the section's two **display-name** slots, but different books fill
+them differently (a Russian book puts the name in `zh` and only an option code in
+`en`). Never label a section straight from `s.en` — a bare code leaks into the
+tree. Use the `secName()` rule (a name has a space, a code does not) for the
+sidebar and search results. See `references/categorization.md`.
+
 ## UI
 - **Chapter → section tree** in the sidebar; full-text search over every part
   number and name (中文 / English / Russian-from-price).
@@ -71,4 +77,5 @@ several sections across chapters and assert: first visible row is the true first
 position, **positions ascending within each figure**, no row overlaps the
 header, drawings load (`naturalWidth>0`), add-to-cart updates totals, search
 returns rows, both export files download and re-open cleanly, catalog⇄manual
-cross-references navigate both ways, and `pageerror`/console-error count is 0.
+cross-references navigate both ways, **every section in the sidebar shows a name
+(not a bare option code)**, and `pageerror`/console-error count is 0.
