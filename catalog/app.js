@@ -37,6 +37,16 @@
     return m > 0 ? m : 1;
   }
   function priceOf(pn) { return PRICES[pn] || null; }
+  // Human-readable section name. Some chapters put the descriptive name in `zh`
+  // (e.g. the Russian QSK60 sections) and only an option code in `en`; others
+  // put the English name in `en`. A bare code (no space) is not a name, so
+  // prefer a real phrase in `en`, else the `zh` name, else fall back to `en`.
+  function secName(s) {
+    if (!s) return "";
+    var en = s.en || "", zh = s.zh || "";
+    if (en && /\s/.test(en)) return en;
+    return zh || en;
+  }
 
   var sectionByCode = {};
   CAT.sections.forEach(function (s) { sectionByCode[s.code] = s; });
@@ -100,7 +110,7 @@
         var li = el("li");
         li.dataset.code = s.code;
         li.innerHTML = '<span class="code">' + esc(s.code) + '</span>' +
-          '<span>' + esc(s.en || s.zh || "") + '</span>';
+          '<span>' + esc(secName(s)) + '</span>';
         li.addEventListener("click", function () { location.hash = "#/s/" + s.code; });
         ul.appendChild(li);
       });
@@ -346,7 +356,7 @@
     Object.keys(bySec).forEach(function (code) {
       var s = sectionByCode[code];
       var block = el("div", "result-sec");
-      var rsh = el("div", "rsh", esc(code) + " · " + esc(s ? (s.en || s.zh) : ""));
+      var rsh = el("div", "rsh", esc(code) + " · " + esc(secName(s)));
       rsh.addEventListener("click", function () { location.hash = "#/s/" + code; });
       block.appendChild(rsh);
       block.appendChild(renderParts(bySec[code]));
