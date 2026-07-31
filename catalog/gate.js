@@ -13,7 +13,7 @@
   // ==== настройки доступа (см. tools/set_catalog_password.py) ====
   var ISSUE_DATE = "2026-07-31";   // дата издания (ГГГГ-ММ-ДД)
   var VALID_DAYS = 31;             // срок действия, дней (≈ 1 месяц)
-  var PASS_SHA256 = "716d6cc6499a2c653adb92468699f507016ad618ffc6df7b3c9b15f82e360aeb"; // sha-256 пароля
+  var PASS_SHA256 = "e40f67ca0d6d0460fcdc6a358c01747f1438510c6a0ed81cbb75fbc603d05397"; // sha-256 пароля
   // ===============================================================
   var LKEY = "razvitie_catalog_unlock_v1";
 
