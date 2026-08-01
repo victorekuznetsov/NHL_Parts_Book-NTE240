@@ -53,6 +53,9 @@ sidebar and search results. See `references/categorization.md`.
   and an order total.
 - **Exports**: order and all-unique-numbers as **real .xlsx** (see
   references/price-list.md — leading zeros preserved). Print sheet with prices.
+- **Update prices locally**: a button reads a new `.xlsx`/`.csv` price list in
+  the browser and layers it over `data/prices.js` (localStorage overlay + a
+  downloadable regenerated `prices.js`), no rebuild — see references/price-list.md.
 - **Manual** button in the header; catalog⇄manual cross-references (references/manual.md).
 - **Branding**: theme via CSS variables so a client palette + logo swap cleanly;
   a pinned top contact bar is an expected touch.

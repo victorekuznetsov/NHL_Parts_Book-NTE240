@@ -7,7 +7,22 @@
   "use strict";
 
   var CAT = window.CATALOG || { chapters: [], sections: [] };
-  var PRICES = window.PRICES || {};
+  // Prices come from data/prices.js (factory). A locally-loaded price file is
+  // kept as an overlay in localStorage and layered on top, so the user can
+  // update prices in the browser without rebuilding. See the "price update"
+  // section below.
+  var FACTORY_PRICES = window.PRICES || {};
+  var PRICE_KEY = "nte240_prices_v1";
+  function loadOverlay() {
+    try { return JSON.parse(localStorage.getItem(PRICE_KEY)) || null; } catch (e) { return null; }
+  }
+  function mergePrices() {
+    var base = {}, ov = loadOverlay(), k;
+    for (k in FACTORY_PRICES) base[k] = FACTORY_PRICES[k];
+    if (ov) for (k in ov) base[k] = ov[k];
+    return base;
+  }
+  var PRICES = mergePrices();
   var CURRENCY = "CNY";
 
   // ---- helpers ----------------------------------------------------------
@@ -52,6 +67,15 @@
   CAT.sections.forEach(function (s) { sectionByCode[s.code] = s; });
   var chapterName = {};
   CAT.chapters.forEach(function (c) { chapterName[c.code] = c; });
+
+  // every part number that appears in the catalog (used to keep the loaded
+  // price overlay small — only prices for real catalog numbers are stored)
+  var CATALOG_PNS = {};
+  CAT.sections.forEach(function (s) {
+    (s.figures || []).forEach(function (f) {
+      (f.parts || []).forEach(function (p) { if (p.pn) CATALOG_PNS[p.pn] = 1; });
+    });
+  });
 
   // Cross-reference between the parts catalog and the operator/service manual:
   // a chapter maps to a Russian topic keyword the manual is searched for.
@@ -569,6 +593,235 @@
     w.document.close(); w.focus(); w.print();
   }
 
+  // ---- price update (load a price file locally, no rebuild) -------------
+  // Reads an .xlsx or .csv price list in the browser and layers it over the
+  // factory prices. Same columns as tools/extract_prices.py: Артикул,
+  // Взаимозаменяемый артикул, Наименование, Цена CNY без НДС, Группа.
+  function normArt(x) {
+    if (x == null) return "";
+    var s = String(x).replace(/ /g, " ").trim();
+    if (/\.0$/.test(s)) s = s.slice(0, -2);
+    return s;
+  }
+  function toPrice(x) {
+    if (x == null || x === "") return null;
+    var s = String(x).replace(/ /g, "").replace(/\s/g, "").replace(",", ".");
+    var v = parseFloat(s);
+    return isNaN(v) ? null : Math.round(v * 100) / 100;
+  }
+  function colIndex(ref) {
+    var m = /^([A-Z]+)/.exec(ref || ""); if (!m) return 0;
+    var s = m[1], n = 0;
+    for (var i = 0; i < s.length; i++) n = n * 26 + (s.charCodeAt(i) - 64);
+    return n - 1;
+  }
+  // --- .xlsx (a zip of XML): read via the browser, inflate with DecompressionStream
+  function readZipEntries(buf) {
+    var dv = new DataView(buf), u8 = new Uint8Array(buf), i = u8.length - 22;
+    for (; i >= 0; i--) { if (dv.getUint32(i, true) === 0x06054b50) break; }
+    if (i < 0) throw new Error("не похоже на .xlsx");
+    var count = dv.getUint16(i + 10, true), off = dv.getUint32(i + 16, true);
+    var entries = {}, p = off, dec = new TextDecoder();
+    for (var n = 0; n < count; n++) {
+      if (dv.getUint32(p, true) !== 0x02014b50) break;
+      var method = dv.getUint16(p + 10, true);
+      var compSize = dv.getUint32(p + 20, true);
+      var nameLen = dv.getUint16(p + 28, true);
+      var extraLen = dv.getUint16(p + 30, true);
+      var commentLen = dv.getUint16(p + 32, true);
+      var lho = dv.getUint32(p + 42, true);
+      var name = dec.decode(u8.subarray(p + 46, p + 46 + nameLen));
+      var lNameLen = dv.getUint16(lho + 26, true), lExtraLen = dv.getUint16(lho + 28, true);
+      var start = lho + 30 + lNameLen + lExtraLen;
+      entries[name] = { method: method, comp: u8.subarray(start, start + compSize) };
+      p += 46 + nameLen + extraLen + commentLen;
+    }
+    return entries;
+  }
+  function inflateEntry(entry) {
+    if (!entry) return Promise.resolve(null);
+    if (entry.method === 0) return Promise.resolve(entry.comp);
+    if (typeof DecompressionStream === "undefined")
+      return Promise.reject(new Error("браузер не умеет читать сжатый .xlsx — сохраните прайс как .csv"));
+    var ds = new DecompressionStream("deflate-raw");
+    return new Response(new Blob([entry.comp]).stream().pipeThrough(ds)).arrayBuffer()
+      .then(function (ab) { return new Uint8Array(ab); });
+  }
+  function readXlsx(buf) {
+    var entries = readZipEntries(buf), dec = new TextDecoder(), cache = {};
+    function textOf(name) {
+      if (name in cache) return Promise.resolve(cache[name]);
+      return inflateEntry(entries[name]).then(function (bytes) {
+        return (cache[name] = bytes ? dec.decode(bytes) : null);
+      });
+    }
+    function sheetPath() {
+      return Promise.all([textOf("xl/workbook.xml"), textOf("xl/_rels/workbook.xml.rels")])
+        .then(function (r) {
+          var wb = r[0], rels = r[1];
+          if (!wb || !rels) return "xl/worksheets/sheet1.xml";
+          var wdoc = new DOMParser().parseFromString(wb, "application/xml");
+          var sheet = wdoc.getElementsByTagName("sheet")[0];
+          var rid = sheet && (sheet.getAttribute("r:id") ||
+            sheet.getAttributeNS("http://schemas.openxmlformats.org/officeDocument/2006/relationships", "id"));
+          var rdoc = new DOMParser().parseFromString(rels, "application/xml");
+          var rs = rdoc.getElementsByTagName("Relationship");
+          for (var i = 0; i < rs.length; i++) {
+            if (rs[i].getAttribute("Id") === rid) {
+              var t = rs[i].getAttribute("Target") || "";
+              t = t.charAt(0) === "/" ? t.slice(1) : "xl/" + t.replace(/^\.\//, "");
+              return t;
+            }
+          }
+          return "xl/worksheets/sheet1.xml";
+        });
+    }
+    return textOf("xl/sharedStrings.xml").then(function (ssXml) {
+      var shared = [];
+      if (ssXml) {
+        var sdoc = new DOMParser().parseFromString(ssXml, "application/xml");
+        var sis = sdoc.getElementsByTagName("si");
+        for (var i = 0; i < sis.length; i++) {
+          var ts = sis[i].getElementsByTagName("t"), str = "";
+          for (var j = 0; j < ts.length; j++) str += ts[j].textContent;
+          shared.push(str);
+        }
+      }
+      return sheetPath().then(textOf).then(function (sheetXml) {
+        if (!sheetXml) throw new Error("лист не найден в файле");
+        var doc = new DOMParser().parseFromString(sheetXml, "application/xml");
+        var rowEls = doc.getElementsByTagName("row"), rows = [];
+        for (var r = 0; r < rowEls.length; r++) {
+          var cells = rowEls[r].getElementsByTagName("c"), arr = [];
+          for (var c = 0; c < cells.length; c++) {
+            var cell = cells[c], t = cell.getAttribute("t"), v = "";
+            if (t === "s") {
+              var vi = cell.getElementsByTagName("v")[0];
+              if (vi) v = shared[parseInt(vi.textContent, 10)] || "";
+            } else if (t === "inlineStr" || t === "str") {
+              var te = cell.getElementsByTagName("t")[0];
+              if (!te) te = cell.getElementsByTagName("v")[0];
+              v = te ? te.textContent : "";
+            } else {
+              var ve = cell.getElementsByTagName("v")[0];
+              v = ve ? ve.textContent : "";
+            }
+            arr[colIndex(cell.getAttribute("r"))] = v;
+          }
+          rows.push(arr);
+        }
+        return rows;
+      });
+    });
+  }
+  // --- .csv
+  function parseCsv(text) {
+    text = text.replace(/^﻿/, "");
+    var head = text.slice(0, (text.indexOf("\n") + 1) || text.length);
+    var delim = (head.split(";").length > head.split(",").length) ? ";" : ",";
+    var rows = [], row = [], cur = "", q = false;
+    for (var i = 0; i < text.length; i++) {
+      var ch = text[i];
+      if (q) {
+        if (ch === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else q = false; }
+        else cur += ch;
+      } else if (ch === '"') { q = true; }
+      else if (ch === delim) { row.push(cur); cur = ""; }
+      else if (ch === "\r") { /* skip */ }
+      else if (ch === "\n") { row.push(cur); rows.push(row); row = []; cur = ""; }
+      else cur += ch;
+    }
+    if (cur !== "" || row.length) { row.push(cur); rows.push(row); }
+    return rows;
+  }
+  // --- rows -> {pn:{p,g,x,n}}, mirroring extract_prices.py's column logic
+  function rowsToPrices(rows) {
+    var hr = -1, col = { art: 0, xref: 1, name: 2, price: 3, group: 4 };
+    for (var i = 0; i < rows.length && hr < 0; i++) {
+      var row = rows[i] || [];
+      for (var c = 0; c < row.length; c++) {
+        if (typeof row[c] === "string" && row[c].trim() === "Артикул") { hr = i; break; }
+      }
+      if (hr === i) {
+        row.forEach(function (cell, c) {
+          var v = (typeof cell === "string" ? cell : "").trim().toLowerCase();
+          if (v === "артикул") col.art = c;
+          else if (v.indexOf("заменя") >= 0) col.xref = c;
+          else if (v === "наименование") col.name = c;
+          else if (v.indexOf("цена") >= 0) col.price = c;
+          else if (v.indexOf("группа") >= 0) col.group = c;
+        });
+      }
+    }
+    if (hr < 0) throw new Error("не найден столбец «Артикул» — проверьте файл прайса");
+    var out = {};
+    for (var r = hr + 1; r < rows.length; r++) {
+      var rw = rows[r] || [], art = normArt(rw[col.art]);
+      if (!art) continue;
+      var rec = {
+        p: toPrice(rw[col.price]),
+        g: rw[col.group] != null ? String(rw[col.group]).trim() : "",
+        x: normArt(rw[col.xref]),
+        n: rw[col.name] != null ? String(rw[col.name]).replace(/ /g, " ").trim() : ""
+      };
+      if (!(art in out)) out[art] = rec;
+      if (rec.x && !(rec.x in out)) out[rec.x] = { p: rec.p, g: rec.g, x: rec.x, n: rec.n };
+    }
+    return out;
+  }
+
+  function pmStatus(msg, err) {
+    var s = $("#priceStatus"); if (!s) return;
+    s.textContent = msg || ""; s.classList.toggle("err", !!err);
+  }
+  function applyPriceRows(rows) {
+    var parsed = rowsToPrices(rows), overlay = loadOverlay() || {}, added = 0, priced = 0;
+    Object.keys(parsed).forEach(function (pn) {
+      if (!CATALOG_PNS[pn]) return;                 // keep the overlay small
+      overlay[pn] = parsed[pn]; added++;
+      if (parsed[pn].p != null) priced++;
+    });
+    if (!added) { pmStatus("В файле не найдено ни одного артикула из каталога.", true); return; }
+    try { localStorage.setItem(PRICE_KEY, JSON.stringify(overlay)); } catch (e) {}
+    PRICES = mergePrices(); searchIndex = null;
+    route(); renderCartCount();
+    if ($("#cart").classList.contains("open")) renderCart();
+    pmStatus("Готово: обновлено номеров — " + added + ", из них с ценой — " + priced + ".");
+    toast("Цены обновлены: " + added);
+  }
+  function onPriceFile(file) {
+    if (!file) return;
+    $("#pmFileLabel").textContent = file.name;
+    pmStatus("Читаю файл…");
+    var reader = /\.csv$/i.test(file.name)
+      ? file.text().then(parseCsv)
+      : file.arrayBuffer().then(readXlsx);
+    reader.then(applyPriceRows).catch(function (e) {
+      pmStatus("Не удалось прочитать файл: " + (e && e.message ? e.message : e) +
+        ". Попробуйте сохранить прайс в формате .csv.", true);
+    });
+  }
+  function downloadPricesJs() {
+    downloadBlob("prices.js",
+      new Blob(["window.PRICES = " + JSON.stringify(PRICES) + ";\n"],
+        { type: "application/javascript" }));
+    toast("Файл prices.js скачан");
+  }
+  function resetPrices() {
+    if (!confirm("Сбросить цены к заводским (из файла prices.js)?")) return;
+    try { localStorage.removeItem(PRICE_KEY); } catch (e) {}
+    PRICES = mergePrices(); searchIndex = null;
+    route(); renderCartCount();
+    if ($("#cart").classList.contains("open")) renderCart();
+    pmStatus("Цены сброшены к заводским."); toast("Цены сброшены");
+  }
+  function openPriceModal() {
+    pmStatus(""); $("#priceModal").classList.add("open"); $("#pmOverlay").classList.add("open");
+  }
+  function closePriceModal() {
+    $("#priceModal").classList.remove("open"); $("#pmOverlay").classList.remove("open");
+  }
+
   // ---- lightbox + toast -------------------------------------------------
   function openLightbox(src) { $("#lbImg").src = src; $("#lightbox").classList.add("open"); }
   function closeLightbox() { $("#lightbox").classList.remove("open"); }
@@ -630,6 +883,13 @@
     $("#printOrder").addEventListener("click", printOrder);
     $("#exportAll").addEventListener("click", exportAllNumbers);
 
+    $("#pricesBtn").addEventListener("click", openPriceModal);
+    $("#pmClose").addEventListener("click", closePriceModal);
+    $("#pmOverlay").addEventListener("click", closePriceModal);
+    $("#priceFile").addEventListener("change", function () { onPriceFile(this.files[0]); });
+    $("#priceDownload").addEventListener("click", downloadPricesJs);
+    $("#priceReset").addEventListener("click", resetPrices);
+
     var serial = $("#serial");
     serial.value = localStorage.getItem(SERIAL_KEY) || "";
     serial.addEventListener("input", function () {
@@ -639,7 +899,7 @@
     $("#lbClose").addEventListener("click", closeLightbox);
     $("#lightbox").addEventListener("click", function (e) { if (e.target.id === "lightbox") closeLightbox(); });
     document.addEventListener("keydown", function (e) {
-      if (e.key === "Escape") { closeLightbox(); closeCart(); }
+      if (e.key === "Escape") { closeLightbox(); closeCart(); closePriceModal(); }
     });
     $("#menuBtn").addEventListener("click", function () { $("#sidebar").classList.toggle("open"); });
 

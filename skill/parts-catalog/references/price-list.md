@@ -28,3 +28,29 @@ not stop this. Two fixes, both used here:
 
 Always validate an exported file by re-opening it (`openpyxl`): the article
 loads as the string `"00106267"`, the price as a float.
+
+## Updating prices later, in the browser (no rebuild)
+The catalog can reload a price file **locally** so the client updates prices
+without Python or the sandbox — a "💲 Обновить цены" button opens a modal that
+reads an `.xlsx` **or** `.csv` in the browser and layers it over the factory
+`data/prices.js`. Reuse the extractor's column logic verbatim (find the
+`Артикул` header row, map Артикул / Взаимозам. / Наименование / Цена / Группа,
+index by article **and** xref, `norm_art` strips a trailing `.0`, price accepts
+comma decimals and NBSP). Design notes that mattered:
+- **Read `.xlsx` in vanilla JS**: it's a ZIP of XML — parse the central
+  directory from the local `File`, inflate each entry with
+  `DecompressionStream("deflate-raw")` (Chromium; if absent, tell the user to
+  save as `.csv`), then read `sharedStrings.xml` + the first sheet (resolve it
+  via `workbook.xml` → `workbook.xml.rels`, don't hardcode `sheet1.xml`). Map
+  cells by the `r=` column letter — **empty cells are omitted**, so positional
+  indexing is wrong.
+- **`.csv`**: detect `;` vs `,` (Russian Excel uses `;`), strip the BOM, honor
+  quoted fields. Never `parseFloat` the article — leading zeros must survive.
+- **Two persistence modes, offer both**: an overlay in `localStorage` (instant,
+  this browser, layered over the factory map on load; a "reset to factory"
+  clears it) **and** a downloadable regenerated `prices.js` the user drops into
+  `data/` to make the change permanent and portable with the `catalog/` folder.
+- Keep the overlay small — store only prices for numbers that exist in the
+  catalog. Invalidate the search index and re-render after applying.
+- The Python `extract_prices.py` stays the canonical/bulk path; the in-browser
+  loader is for quick field updates.
