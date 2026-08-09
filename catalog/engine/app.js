@@ -227,7 +227,10 @@ function renderSheets(o) {
   img.alt = "Чертёж узла " + o.no;
   car.classList.toggle("hidden", o.sheets.length < 2);
   $("sheet-label").textContent = "Лист " + (state.sheet + 1) + " из " + o.sheets.length;
-  hint.textContent = "Номер на чертеже = № позиции в таблице. Щелчок по чертежу — увеличить.";
+  var fromPdf = o.pdfSheets && o.pdfSheets.indexOf(o.sheets[state.sheet]) >= 0;
+  hint.textContent = fromPdf
+    ? "Чертёж из заводского PDF-каталога NTE240 (Cummins на сайте для этого узла чертёж не публикует; ревизия узла может немного отличаться). Щелчок по чертежу — увеличить."
+    : "Номер на чертеже = № позиции в таблице. Щелчок по чертежу — увеличить.";
 }
 
 $("sheet-prev").onclick = function () {
