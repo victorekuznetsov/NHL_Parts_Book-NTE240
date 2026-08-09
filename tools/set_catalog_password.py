@@ -23,7 +23,12 @@ import hashlib
 import datetime
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-GATE = os.path.join(ROOT, "catalog", "gate.js")
+# both gate files must stay in sync: the main catalog and the QSK60 engine
+# sub-catalog share the same password/issue-date/validity.
+GATES = [
+    os.path.join(ROOT, "catalog", "gate.js"),
+    os.path.join(ROOT, "catalog", "engine", "gate.js"),
+]
 
 
 def main():
@@ -36,15 +41,20 @@ def main():
         raise SystemExit("issue date must be YYYY-MM-DD")
 
     h = hashlib.sha256(password.encode("utf-8")).hexdigest()
-    s = open(GATE, encoding="utf-8").read()
-    s = re.sub(r'var ISSUE_DATE = "[^"]*";', 'var ISSUE_DATE = "%s";' % issue, s)
-    s = re.sub(r'var PASS_SHA256 = "[^"]*";', 'var PASS_SHA256 = "%s";' % h, s)
-    if days:
-        s = re.sub(r'var VALID_DAYS = \d+;', "var VALID_DAYS = %d;" % int(days), s)
-    open(GATE, "w", encoding="utf-8").write(s)
-    print("Дата издания: %s   Срок действия: %s дней" %
-          (issue, days or re.search(r"var VALID_DAYS = (\d+);", s).group(1)))
-    print("SHA-256 пароля записан в catalog/gate.js (%s…)" % h[:16])
+    days_out = days
+    for gate in GATES:
+        if not os.path.exists(gate):
+            continue
+        s = open(gate, encoding="utf-8").read()
+        s = re.sub(r'var ISSUE_DATE = "[^"]*";', 'var ISSUE_DATE = "%s";' % issue, s)
+        s = re.sub(r'var PASS_SHA256 = "[^"]*";', 'var PASS_SHA256 = "%s";' % h, s)
+        if days:
+            s = re.sub(r'var VALID_DAYS = \d+;', "var VALID_DAYS = %d;" % int(days), s)
+        open(gate, "w", encoding="utf-8").write(s)
+        days_out = days or re.search(r"var VALID_DAYS = (\d+);", s).group(1)
+        print("  ✓ %s" % os.path.relpath(gate, ROOT))
+    print("Дата издания: %s   Срок действия: %s дней" % (issue, days_out))
+    print("SHA-256 пароля записан в gate.js основного каталога и каталога двигателя (%s…)" % h[:16])
 
 
 if __name__ == "__main__":
