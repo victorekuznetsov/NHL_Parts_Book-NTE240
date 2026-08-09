@@ -184,6 +184,20 @@
       '</div>';
     content.appendChild(head);
 
+    if (s.chapter === "700") {
+      var eng = el("div", "engine-cta");
+      eng.innerHTML =
+        '<h2>Подробный каталог двигателя Cummins QSK60</h2>' +
+        '<p>Двигатель QSK60 CM2150 MCRS (ESN 33239746, CPL 3451) вынесен в ' +
+        'отдельный подробный каталог, собранный из официального каталога ' +
+        'Cummins: 92&nbsp;системы, 1041&nbsp;деталь, чертежи узлов, фотографии ' +
+        'и характеристики деталей, цены (CNY) из прайса NTE240.</p>' +
+        '<a class="engine-open" href="engine/index.html">🛠 Открыть каталог двигателя QSK60 →</a>';
+      content.appendChild(eng);
+      window.scrollTo(0, 0);
+      return;
+    }
+
     var figs = s.figures || [];
     figs.forEach(function (f, i) { content.appendChild(renderFigure(s, f, i, figs.length)); });
     window.scrollTo(0, 0);
