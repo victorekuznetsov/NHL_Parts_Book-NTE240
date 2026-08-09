@@ -157,6 +157,8 @@ main.content { flex: 1; min-width: 0; padding: 22px 26px 80px; }
 .sec-head .xref-link:hover { border-color: var(--accent-strong); background: #f0fdf8; text-decoration: none; }
 .sec-head .xref-link.repair { color: #b45309; border-color: #f0c9a0; background: #fffaf3; }
 .sec-head .xref-link.repair:hover { border-color: #e08a2b; background: #fff3e4; }
+.sec-head .xref-link.engine { color: var(--accent-ink); border-color: var(--accent-strong); background: linear-gradient(180deg, rgba(62,240,175,.14), rgba(62,240,175,.05)); }
+.sec-head .xref-link.engine:hover { background: rgba(62,240,175,.22); }
 
 .figure {
   background: var(--surface); border: 1px solid var(--line);

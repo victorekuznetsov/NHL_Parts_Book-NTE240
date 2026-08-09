@@ -173,30 +173,19 @@
       ? '<a class="xref-link repair" href="service/' + encodeURIComponent(s.code) +
         '.html">🔧 Инструкция по ремонту раздела →</a>'
       : "";
+    var engineLink = s.chapter === "700"
+      ? '<a class="xref-link engine" href="engine/index.html">🛠 Подробный каталог двигателя QSK60 (Cummins, с фото и ценами) →</a>'
+      : "";
     head.innerHTML =
       '<div class="crumb">' + esc(ch.code) + " · " + esc(ch.en || ch.zh || "") + "</div>" +
       "<h1>" + esc(s.code) + " " + esc(s.zh || "") +
       ' <span class="en">' + esc(s.en || "") + "</span></h1>" +
       '<div class="meta">' + (s.figures || []).length + " рис. · " +
       count + " позиц. с номером детали</div>" +
-      '<div class="xref-row">' + serviceLink +
+      '<div class="xref-row">' + serviceLink + engineLink +
       '<a class="xref-link" href="' + manualHref + '">📖 Открыть тему в руководстве по эксплуатации →</a>' +
       '</div>';
     content.appendChild(head);
-
-    if (s.chapter === "700") {
-      var eng = el("div", "engine-cta");
-      eng.innerHTML =
-        '<h2>Подробный каталог двигателя Cummins QSK60</h2>' +
-        '<p>Двигатель QSK60 CM2150 MCRS (ESN 33239746, CPL 3451) вынесен в ' +
-        'отдельный подробный каталог, собранный из официального каталога ' +
-        'Cummins: 92&nbsp;системы, 1041&nbsp;деталь, чертежи узлов, фотографии ' +
-        'и характеристики деталей, цены (CNY) из прайса NTE240.</p>' +
-        '<a class="engine-open" href="engine/index.html">🛠 Открыть каталог двигателя QSK60 →</a>';
-      content.appendChild(eng);
-      window.scrollTo(0, 0);
-      return;
-    }
 
     var figs = s.figures || [];
     figs.forEach(function (f, i) { content.appendChild(renderFigure(s, f, i, figs.length)); });
