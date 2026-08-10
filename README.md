@@ -16,7 +16,9 @@
 
 ## Что внутри
 
-- `index.html`, `app.js`, `styles.css`, `gate.js` — основной каталог NTE240.
+- `index.html`, `app.js`, `styles.css`, `gate.js` — основной каталог NTE240
+  (поиск, заказ-спецификация, обновление цен, **проверка списка номеров** с
+  выгрузкой результата в Excel).
 - `data/` — данные каталога (`parts.js`, `prices.js`, `service.js`).
 - `drawings/`, `service_media/`, `manual_media/` — иллюстрации.
 - `manual.html`, `service.html`, `service/` — руководство и инструкции по ремонту.

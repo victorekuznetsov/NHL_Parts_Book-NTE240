@@ -369,3 +369,56 @@ aside.cart.open { transform: none; }
   font-size: 15px; text-decoration: none;
 }
 .engine-open:hover { filter: brightness(1.06); color: #04120c; text-decoration: none; }
+
+/* --- Проверка списка номеров --- */
+.check-modal {
+  position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(.97);
+  width: min(1040px, 94vw); max-height: 90vh; display: none; opacity: 0;
+  background: var(--surface); border-radius: 14px; box-shadow: 0 20px 60px rgba(10,14,18,.35);
+  z-index: 125; transition: opacity .18s, transform .18s; flex-direction: column;
+}
+.check-modal.open { display: flex; opacity: 1; transform: translate(-50%, -50%) scale(1); }
+.check-modal .pm-h { display: flex; align-items: center; padding: 16px 18px; border-bottom: 1px solid var(--line); }
+.check-modal .pm-h h2 { margin: 0; font-size: 17px; }
+.check-modal .pm-h .close { margin-left: auto; border: none; background: none; font-size: 22px; color: var(--muted); cursor: pointer; }
+.chk-body { padding: 16px 18px; overflow: auto; }
+.chk-body textarea {
+  width: 100%; box-sizing: border-box; min-height: 92px; resize: vertical;
+  border: 1px solid var(--line-strong); border-radius: 8px; padding: 10px 12px;
+  font: 13px "Cascadia Code", Consolas, monospace; background: var(--surface); color: var(--ink);
+}
+.chk-body textarea:focus { outline: none; border-color: var(--accent-strong); }
+.chk-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; align-items: center; }
+.chk-actions .chk-filelbl { cursor: pointer; }
+.chk-actions input[type=file] { display: none; }
+.chk-status { min-height: 20px; font-size: 13px; color: var(--ink-soft); margin: 2px 0 8px; }
+.chk-status.err { color: var(--danger); }
+.chk-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.chk-table th, .chk-table td { border-bottom: 1px solid var(--line); padding: 7px 9px; text-align: left; vertical-align: top; }
+.chk-table th { background: var(--surface-2); position: sticky; top: 0; z-index: 1; font-weight: 700; }
+.chk-table th.price, .chk-table td.price { text-align: right; white-space: nowrap; }
+.chk-table .chk-q { font-family: "Cascadia Code", Consolas, monospace; white-space: nowrap; }
+.chk-table .chk-name .ru { font-weight: 600; }
+.chk-table .chk-name .zh, .chk-table .chk-name .en { color: var(--muted); font-size: 12px; }
+.chk-miss { background: rgba(220,80,80,.06); }
+.chk-none { color: var(--danger); font-style: italic; }
+.chk-via { color: var(--accent-ink); font-size: 11.5px; margin-top: 2px; }
+.chk-open {
+  border: none; background: none; padding: 0; cursor: pointer; color: var(--accent-ink);
+  font-weight: 700; font-family: "Cascadia Code", Consolas, monospace; text-decoration: underline;
+}
+.chk-secs { display: flex; flex-wrap: wrap; gap: 4px; }
+.chk-sec {
+  border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink-soft);
+  border-radius: 6px; padding: 2px 7px; font-size: 11.5px; cursor: pointer; max-width: 260px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.chk-sec:hover { border-color: var(--accent-strong); color: var(--accent-ink); background: var(--surface-2); }
+@media (max-width: 900px) { #checkBtn { font-size: 0; padding: 0 12px; } #checkBtn::before { content: "🔎"; font-size: 16px; } }
+
+/* row flash when arriving from the check-list results */
+tr.pn-flash > td { animation: pnflash 2.2s ease-out; }
+@keyframes pnflash {
+  0%, 40% { background: rgba(62,240,175,.45); }
+  100% { background: transparent; }
+}

@@ -190,6 +190,21 @@
     var figs = s.figures || [];
     figs.forEach(function (f, i) { content.appendChild(renderFigure(s, f, i, figs.length)); });
     window.scrollTo(0, 0);
+    if (focusPN) { focusRow(focusPN); focusPN = null; }
+  }
+
+  // when arriving from the "check list" results, flash the requested part row
+  var focusPN = null;
+  function focusRow(pn) {
+    var rows = document.querySelectorAll('#content tr[data-pn]');
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i].getAttribute("data-pn") === pn) {
+        rows[i].classList.add("pn-flash");
+        rows[i].scrollIntoView({ block: "center" });
+        (function (r) { setTimeout(function () { r.classList.remove("pn-flash"); }, 2400); })(rows[i]);
+        break;
+      }
+    }
   }
 
   function refRange(parts) {
@@ -291,6 +306,7 @@
 
   function renderRow(p) {
     var tr = el("tr", p.lvl ? "lvl" + Math.min(p.lvl, 2) : "");
+    if (p.pn) tr.dataset.pn = p.pn;
     var pr = p.pn ? priceOf(p.pn) : null;
 
     // № + part number
@@ -786,7 +802,7 @@
     });
     if (!added) { pmStatus("В файле не найдено ни одного артикула из каталога.", true); return; }
     try { localStorage.setItem(PRICE_KEY, JSON.stringify(overlay)); } catch (e) {}
-    PRICES = mergePrices(); searchIndex = null;
+    PRICES = mergePrices(); searchIndex = null; checkIndex = null;
     route(); renderCartCount();
     if ($("#cart").classList.contains("open")) renderCart();
     pmStatus("Готово: обновлено номеров — " + added + ", из них с ценой — " + priced + ".");
@@ -813,7 +829,7 @@
   function resetPrices() {
     if (!confirm("Сбросить цены к заводским (из файла prices.js)?")) return;
     try { localStorage.removeItem(PRICE_KEY); } catch (e) {}
-    PRICES = mergePrices(); searchIndex = null;
+    PRICES = mergePrices(); searchIndex = null; checkIndex = null;
     route(); renderCartCount();
     if ($("#cart").classList.contains("open")) renderCart();
     pmStatus("Цены сброшены к заводским."); toast("Цены сброшены");
@@ -823,6 +839,208 @@
   }
   function closePriceModal() {
     $("#priceModal").classList.remove("open"); $("#pmOverlay").classList.remove("open");
+  }
+
+  // ---- check a list of part numbers against the catalog -----------------
+  // Normalise a number for matching (case, spaces, dashes). Leading zeros are
+  // significant in these catalogs, so they are kept; a zero-stripped key is
+  // tried only as a fallback.
+  function normNo(s) { return String(s == null ? "" : s).toUpperCase().replace(/[\s\-]/g, ""); }
+  function stripZeros(s) { return s.replace(/^0+/, ""); }
+
+  var checkIndex = null;   // { byNo, byXref, meta }
+  function buildCheckIndex() {
+    if (checkIndex) return checkIndex;
+    var meta = {};   // pn -> { pn, zh, en, secs:{} }
+    CAT.sections.forEach(function (s) {
+      sectionParts(s).forEach(function (p) {
+        if (!p.pn) return;
+        var m = meta[p.pn] || (meta[p.pn] = { pn: p.pn, zh: p.zh || "", en: p.en || "", secs: {} });
+        m.secs[s.code] = 1;
+        if (!m.zh && p.zh) m.zh = p.zh;
+        if (!m.en && p.en) m.en = p.en;
+      });
+    });
+    var byNo = {}, byXref = {};
+    Object.keys(meta).forEach(function (pn) {
+      var k = normNo(pn);
+      byNo[k] = pn; byNo[stripZeros(k)] = byNo[stripZeros(k)] || pn;
+      var pr = priceOf(pn);
+      if (pr && pr.x) {
+        var xk = normNo(pr.x);
+        if (xk && !byNo[xk]) { byXref[xk] = pn; byXref[stripZeros(xk)] = byXref[stripZeros(xk)] || pn; }
+      }
+    });
+    return (checkIndex = { byNo: byNo, byXref: byXref, meta: meta });
+  }
+  function lookupNo(raw) {
+    var idx = buildCheckIndex(), k = normNo(raw);
+    if (!k) return null;
+    if (idx.byNo[k]) return { pn: idx.byNo[k], via: "no" };
+    if (idx.byXref[k]) return { pn: idx.byXref[k], via: "xref" };
+    var z = stripZeros(k);
+    if (idx.byNo[z]) return { pn: idx.byNo[z], via: "no" };
+    if (idx.byXref[z]) return { pn: idx.byXref[z], via: "xref" };
+    return null;
+  }
+
+  var checkResults = [];   // last run, for export
+  function parseNumbers(text) {
+    return String(text || "").split(/[\s,;]+/).map(function (t) { return t.trim(); })
+      .filter(function (t) { return t.length > 0; });
+  }
+  function runCheck(nums) {
+    var idx = buildCheckIndex();
+    var seen = {}, out = [];
+    nums.forEach(function (raw) {
+      var key = normNo(raw);
+      if (!key || seen[key]) return;   // skip blanks and duplicates
+      seen[key] = 1;
+      var hit = lookupNo(raw), rec;
+      if (hit) {
+        var m = idx.meta[hit.pn], pr = priceOf(hit.pn) || {};
+        rec = {
+          query: raw, found: true, via: hit.via, pn: hit.pn,
+          ru: pr.n || "", en: m.en || "", zh: m.zh || "",
+          price: pr.p != null ? pr.p : null, group: pr.g || "", xref: pr.x || "",
+          secs: Object.keys(m.secs).sort()
+        };
+      } else {
+        rec = { query: raw, found: false, via: null, pn: "", ru: "", en: "", zh: "",
+          price: null, group: "", xref: "", secs: [] };
+      }
+      out.push(rec);
+    });
+    checkResults = out;
+    renderCheckResults();
+  }
+  function renderCheckResults() {
+    var box = $("#chkResults"), st = $("#chkStatus");
+    box.innerHTML = "";
+    if (!checkResults.length) {
+      st.textContent = ""; $("#chkExport").disabled = true; return;
+    }
+    var found = checkResults.filter(function (r) { return r.found; }).length;
+    var viaX = checkResults.filter(function (r) { return r.via === "xref"; }).length;
+    st.innerHTML = "Проверено: <b>" + checkResults.length + "</b> · найдено: <b>" + found +
+      "</b> · не найдено: <b>" + (checkResults.length - found) + "</b>" +
+      (viaX ? " · по взаимозам. артикулу: <b>" + viaX + "</b>" : "");
+    $("#chkExport").disabled = false;
+
+    var table = el("table", "chk-table");
+    table.innerHTML = "<thead><tr>" +
+      "<th>Запрос</th><th>Номер детали</th><th>Наименование</th>" +
+      '<th class="price">Цена, ' + CURRENCY + "</th><th>Группа</th><th>Взаимозам.</th>" +
+      "<th>Разделы</th></tr></thead>";
+    var tb = el("tbody");
+    checkResults.forEach(function (r) {
+      var tr = el("tr", r.found ? "" : "chk-miss");
+      if (!r.found) {
+        tr.innerHTML = '<td class="chk-q">' + esc(r.query) + "</td>" +
+          '<td colspan="6" class="chk-none">не найдено в каталоге</td>';
+        tb.appendChild(tr); return;
+      }
+      var nameHtml = "";
+      if (r.ru) nameHtml += '<div class="ru">' + esc(r.ru) + "</div>";
+      if (r.zh) nameHtml += '<div class="zh">' + esc(r.zh) + "</div>";
+      if (r.en) nameHtml += '<div class="en">' + esc(r.en) + "</div>";
+      if (!nameHtml) nameHtml = "—";
+      var via = r.via === "xref"
+        ? '<div class="chk-via">вместо ' + esc(r.query) + "</div>" : "";
+      var secChips = r.secs.map(function (code) {
+        var s = sectionByCode[code];
+        return '<button class="chk-sec" data-sec="' + esc(code) + '" data-pn="' + esc(r.pn) +
+          '" title="Открыть раздел ' + esc(code) + ' в каталоге">' + esc(code) +
+          " · " + esc(secName(s)) + "</button>";
+      }).join("");
+      tr.innerHTML =
+        '<td class="chk-q">' + esc(r.query) + "</td>" +
+        '<td class="chk-pn"><button class="chk-open" data-sec="' + esc(r.secs[0] || "") +
+          '" data-pn="' + esc(r.pn) + '" title="Открыть в каталоге">' + esc(r.pn) + "</button>" + via + "</td>" +
+        '<td class="chk-name">' + nameHtml + "</td>" +
+        '<td class="price">' + (r.price != null ? fmt(r.price) : '<span class="muted">—</span>') + "</td>" +
+        "<td>" + esc(r.group || "") + "</td>" +
+        "<td>" + esc(r.xref || "") + "</td>" +
+        '<td class="chk-secs">' + secChips + "</td>";
+      tb.appendChild(tr);
+    });
+    table.appendChild(tb);
+    box.appendChild(table);
+    // navigate to the catalog section (and flash the part) on click
+    box.querySelectorAll(".chk-sec, .chk-open").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var sec = btn.getAttribute("data-sec"), pn = btn.getAttribute("data-pn");
+        if (!sec) return;
+        focusPN = pn; closeCheck();
+        var target = "#/s/" + sec;
+        if (location.hash === target) { highlightSidebar(sec); renderSection(sec); }
+        else location.hash = target;
+      });
+    });
+  }
+  function exportCheck() {
+    if (!checkResults.length) { toast("Список пуст"); return; }
+    var headers = ["Запрошенный номер", "Статус", "Номер в каталоге", "Наименование (RU)",
+      "Description (EN)", "Описание (ZH)", "Цена, " + CURRENCY, "Группа",
+      "Взаимозаменяемый артикул", "Разделы"];
+    var types = ["s", "s", "s", "s", "s", "s", "n", "s", "s", "s"];
+    var rows = checkResults.map(function (r) {
+      var status = !r.found ? "не найдено" : (r.via === "xref" ? "найдено (взаимозам.)" : "найдено");
+      return [r.query, status, r.pn, r.ru, r.en, r.zh,
+        r.price != null ? r.price : "", r.group, r.xref, r.secs.join(" ")];
+    });
+    downloadBlob("NTE240_проверка_номеров.xlsx", xlsx("Проверка", headers, rows, types));
+    toast("Выгружено строк: " + rows.length);
+  }
+  function chkStatusMsg(msg, err) {
+    var s = $("#chkStatus"); if (!s) return;
+    s.innerHTML = msg || ""; s.classList.toggle("err", !!err);
+  }
+  function onCheckFile(file) {
+    if (!file) return;
+    chkStatusMsg("Читаю файл…");
+    var done = function (nums) {
+      var cur = $("#chkInput").value.trim();
+      $("#chkInput").value = (cur ? cur + "\n" : "") + nums.join("\n");
+      runCheck(parseNumbers($("#chkInput").value));
+    };
+    if (/\.xlsx$/i.test(file.name)) {
+      file.arrayBuffer().then(readXlsx).then(function (rows) {
+        var nums = [];
+        rows.forEach(function (row) {
+          if (!row) return;
+          for (var c = 0; c < row.length; c++) {
+            var v = (row[c] == null ? "" : String(row[c])).trim();
+            if (v) { nums.push(v); break; }   // first non-empty cell of the row
+          }
+        });
+        // drop an obvious header token
+        if (nums.length && !/\d/.test(nums[0]) && /артикул|номер|наимен|деталь|part|no\.?/i.test(nums[0])) nums.shift();
+        done(nums);
+      }).catch(function (e) {
+        chkStatusMsg("Не удалось прочитать .xlsx: " + (e && e.message ? e.message : e) +
+          ". Сохраните список как .csv или .txt.", true);
+      });
+    } else {
+      file.text().then(function (text) {
+        var nums = [];
+        text.split(/\r?\n/).forEach(function (line) {
+          var cell = line.split(/[,;\t]/)[0].trim();
+          if (cell) nums.push(cell);
+        });
+        if (nums.length && !/\d/.test(nums[0]) && /артикул|номер|наимен|деталь|part|no\.?/i.test(nums[0])) nums.shift();
+        done(nums);
+      }).catch(function (e) {
+        chkStatusMsg("Не удалось прочитать файл: " + (e && e.message ? e.message : e), true);
+      });
+    }
+  }
+  function openCheck() {
+    $("#checkModal").classList.add("open"); $("#chkOverlay").classList.add("open");
+    setTimeout(function () { var t = $("#chkInput"); if (t) t.focus(); }, 30);
+  }
+  function closeCheck() {
+    $("#checkModal").classList.remove("open"); $("#chkOverlay").classList.remove("open");
   }
 
   // ---- lightbox + toast -------------------------------------------------
@@ -892,6 +1110,16 @@
     $("#priceFile").addEventListener("change", function () { onPriceFile(this.files[0]); });
     $("#priceDownload").addEventListener("click", downloadPricesJs);
     $("#priceReset").addEventListener("click", resetPrices);
+
+    $("#checkBtn").addEventListener("click", openCheck);
+    $("#chkClose").addEventListener("click", closeCheck);
+    $("#chkOverlay").addEventListener("click", closeCheck);
+    $("#chkRun").addEventListener("click", function () { runCheck(parseNumbers($("#chkInput").value)); });
+    $("#chkFile").addEventListener("change", function () { onCheckFile(this.files[0]); this.value = ""; });
+    $("#chkExport").addEventListener("click", exportCheck);
+    $("#chkClear").addEventListener("click", function () {
+      $("#chkInput").value = ""; checkResults = []; renderCheckResults(); $("#chkStatus").textContent = "";
+    });
 
     var serial = $("#serial");
     serial.value = localStorage.getItem(SERIAL_KEY) || "";
