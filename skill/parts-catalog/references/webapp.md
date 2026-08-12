@@ -56,6 +56,14 @@ sidebar and search results. See `references/categorization.md`.
 - **Update prices locally**: a button reads a new `.xlsx`/`.csv` price list in
   the browser and layers it over `data/prices.js` (localStorage overlay + a
   downloadable regenerated `prices.js`), no rebuild — see references/price-list.md.
+- **Availability check by list**: paste or upload a list of part numbers; report
+  which are in the catalog (directly and via the interchangeable article) with
+  every attribute the catalog holds — RU/EN/ZH name, price, group, xref,
+  on-scheme qty, sections — and export the result to `.xlsx`. Build a
+  `pn → {name,qty,sections}` index once (invalidate it when prices change) plus a
+  reverse `interchangeable-article → pn` map; reuse the same `.xlsx`/`.csv`
+  readers as the price loader. Note: these books/price lists carry **no weight**,
+  so there is no weight column — output only attributes that exist.
 - **Manual** button in the header; catalog⇄manual cross-references (references/manual.md).
 - **Branding**: theme via CSS variables so a client palette + logo swap cleanly;
   a pinned top contact bar is an expected touch.

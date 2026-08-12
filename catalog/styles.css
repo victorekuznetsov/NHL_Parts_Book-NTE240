@@ -326,6 +326,41 @@ aside.cart.open { transform: none; }
 .pm-acts { display: flex; gap: 8px; margin-top: 8px; }
 .pm-acts .btn { flex: 1; }
 
+/* -------- availability-check modal -------- */
+.check-modal {
+  position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(.96);
+  width: min(900px, 96vw); max-height: 92vh; display: none; opacity: 0;
+  flex-direction: column; background: var(--surface); border-radius: 14px;
+  box-shadow: 0 20px 60px rgba(10,14,18,.35); z-index: 125; transition: opacity .18s, transform .18s;
+}
+.check-modal.open { display: flex; opacity: 1; transform: translate(-50%, -50%) scale(1); }
+.check-modal .pm-h { display: flex; align-items: center; padding: 16px 18px; border-bottom: 1px solid var(--line); }
+.check-modal .pm-h h2 { margin: 0; font-size: 17px; }
+.check-modal .pm-h .close { margin-left: auto; border: none; background: none; font-size: 22px; color: var(--muted); cursor: pointer; }
+.check-modal .pm-body { padding: 16px 18px; overflow-y: auto; }
+.check-modal textarea {
+  width: 100%; border: 1px solid var(--line-strong); border-radius: 8px; padding: 10px;
+  font: 13px "Cascadia Code", Consolas, monospace; resize: vertical; background: var(--surface-2); color: var(--ink);
+}
+.check-modal textarea:focus { outline: none; border-color: var(--accent-strong); background: #fff; }
+.chk-row { display: flex; gap: 10px; align-items: stretch; margin-top: 10px; }
+.chk-row .pm-file { flex: 1; margin: 0; padding: 10px 14px; }
+.chk-row .btn { flex: none; padding: 0 22px; }
+.chk-results { margin-top: 12px; }
+.chk-summary { font-size: 13px; margin-bottom: 8px; }
+.chk-summary b { color: var(--ink); }
+.chk-table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; max-height: 42vh; overflow-y: auto; }
+table.chk { border-collapse: collapse; width: 100%; font-size: 12.5px; white-space: nowrap; }
+table.chk th, table.chk td { border-bottom: 1px solid var(--line); padding: 6px 9px; text-align: left; }
+table.chk th { background: var(--surface-2); position: sticky; top: 0; z-index: 1; }
+table.chk td.num { text-align: right; }
+table.chk tr.miss { background: rgba(209,73,91,.06); }
+table.chk .st { font-weight: 700; }
+table.chk .st.in { color: var(--ok); }
+table.chk .st.xref { color: #b26a00; }
+table.chk .st.miss { color: var(--danger); }
+table.chk .mono { font-family: "Cascadia Code", Consolas, monospace; }
+
 .sidebar-tools { padding: 10px 14px; border-bottom: 1px solid var(--line); }
 .sidebar-tools button { width: 100%; height: 34px; border: 1px dashed var(--line-strong); background: #fff;
   border-radius: 8px; color: var(--ink-soft); font-size: 12.5px; }

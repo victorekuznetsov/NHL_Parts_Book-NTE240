@@ -32,6 +32,7 @@
   <span class="spacer"></span>
   <a class="manual-btn" href="service.html">🔧 Ремонт и обслуживание</a>
   <a class="manual-btn" href="manual.html">📘 Руководство по эксплуатации</a>
+  <button class="price-btn" id="checkBtn" type="button" title="Проверить список номеров на наличие в каталоге">🔎 Проверить по списку</button>
   <button class="price-btn" id="pricesBtn" type="button" title="Обновить цены из файла прайса">💲 Обновить цены</button>
   <button class="cart-btn" id="cartBtn">
     <span>Заказ</span>
@@ -95,6 +96,36 @@
     <div class="pm-acts">
       <button class="btn primary" id="priceDownload" type="button">⬇ Скачать prices.js</button>
       <button class="btn ghost" id="priceReset" type="button">Сбросить к заводским</button>
+    </div>
+  </div>
+</div>
+
+<!-- availability check by list -->
+<div class="overlay" id="chkOverlay"></div>
+<div class="check-modal" id="checkModal" role="dialog" aria-modal="true" aria-labelledby="chkTitle">
+  <div class="pm-h">
+    <h2 id="chkTitle">Проверка наличия по списку</h2>
+    <button class="close" id="chkClose" aria-label="Закрыть">×</button>
+  </div>
+  <div class="pm-body">
+    <p class="pm-note">Вставьте список каталожных номеров (по одному в строке) <b>или</b>
+      загрузите файл <b>.xlsx</b>/<b>.csv</b>. Каталог покажет, какие номера есть в наличии,
+      со всеми имеющимися атрибутами: наименование, цена (CNY), группа, взаимозаменяемый
+      артикул, кол-во по схеме и разделы, где деталь встречается.</p>
+    <textarea id="chkText" rows="5" placeholder="00106267&#10;20083750&#10;09014080 …"></textarea>
+    <div class="chk-row">
+      <label class="pm-file" for="chkFile">
+        <span class="pm-file-ico">⬆</span>
+        <span id="chkFileLabel">…или выбрать файл со списком</span>
+        <input type="file" id="chkFile" accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+      </label>
+      <button class="btn primary" id="chkRun" type="button">Проверить</button>
+    </div>
+    <div class="pm-status" id="chkStatus"></div>
+    <div class="chk-results" id="chkResults"></div>
+    <div class="pm-acts">
+      <button class="btn" id="chkExport" type="button" disabled>⬇ Скачать результат (Excel)</button>
+      <button class="btn ghost" id="chkClear" type="button">Очистить</button>
     </div>
   </div>
 </div>

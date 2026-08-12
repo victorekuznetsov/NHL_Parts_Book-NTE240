@@ -783,7 +783,7 @@
     });
     if (!added) { pmStatus("В файле не найдено ни одного артикула из каталога.", true); return; }
     try { localStorage.setItem(PRICE_KEY, JSON.stringify(overlay)); } catch (e) {}
-    PRICES = mergePrices(); searchIndex = null;
+    PRICES = mergePrices(); searchIndex = null; partIndex = null;
     route(); renderCartCount();
     if ($("#cart").classList.contains("open")) renderCart();
     pmStatus("Готово: обновлено номеров — " + added + ", из них с ценой — " + priced + ".");
@@ -810,7 +810,7 @@
   function resetPrices() {
     if (!confirm("Сбросить цены к заводским (из файла prices.js)?")) return;
     try { localStorage.removeItem(PRICE_KEY); } catch (e) {}
-    PRICES = mergePrices(); searchIndex = null;
+    PRICES = mergePrices(); searchIndex = null; partIndex = null;
     route(); renderCartCount();
     if ($("#cart").classList.contains("open")) renderCart();
     pmStatus("Цены сброшены к заводским."); toast("Цены сброшены");
@@ -820,6 +820,148 @@
   }
   function closePriceModal() {
     $("#priceModal").classList.remove("open"); $("#pmOverlay").classList.remove("open");
+  }
+
+  // ---- availability check by list --------------------------------------
+  // Paste or upload a list of part numbers; report which are in the catalog,
+  // with every attribute the catalog has (name, price, group, interchangeable
+  // article, on-scheme qty, sections). Matches directly and via the
+  // interchangeable article. (The source books/price list carry no weight, so
+  // there is no weight column to show.)
+  var partIndex = null, xrefIndex = null, lastCheck = null;
+  function buildPartIndex() {
+    if (partIndex) return;
+    partIndex = {}; xrefIndex = {};
+    CAT.sections.forEach(function (s) {
+      (s.figures || []).forEach(function (f) {
+        (f.parts || []).forEach(function (p) {
+          if (!p.pn) return;
+          var u = partIndex[p.pn] || (partIndex[p.pn] = { zh: "", en: "", qty: "", secs: {} });
+          u.secs[s.code] = 1;
+          if (!u.zh && p.zh) u.zh = p.zh;
+          if (!u.en && p.en) u.en = p.en;
+          if (!u.qty && p.qty) u.qty = p.qty;
+        });
+      });
+    });
+    Object.keys(partIndex).forEach(function (pn) {
+      var pr = PRICES[pn];
+      if (pr && pr.x) { var k = normArt(pr.x); if (k && !partIndex[k] && !xrefIndex[k]) xrefIndex[k] = pn; }
+    });
+  }
+  function lookupPart(req) {
+    buildPartIndex();
+    var k = normArt(req);
+    if (!k) return null;
+    var how = "", pn = "";
+    if (partIndex[k]) { how = "in"; pn = k; }
+    else if (xrefIndex[k]) { how = "xref"; pn = xrefIndex[k]; }
+    else return { req: req, status: "miss", pn: "", n: "", en: "", zh: "", p: "", g: "", x: "", qty: "", secs: "" };
+    var u = partIndex[pn], pr = PRICES[pn] || {};
+    return {
+      req: req, status: how, pn: pn, n: pr.n || "", en: u.en || "", zh: u.zh || "",
+      p: pr.p != null ? pr.p : "", g: pr.g || "", x: pr.x || "", qty: u.qty || "",
+      secs: Object.keys(u.secs).sort().join(" ")
+    };
+  }
+  // pull the list of numbers out of parsed spreadsheet rows
+  function numbersFromRows(rows) {
+    if (!rows.length) return [];
+    var col = 0, start = 0, found = false;
+    for (var i = 0; i < Math.min(rows.length, 15) && !found; i++) {
+      var row = rows[i] || [];
+      for (var c = 0; c < row.length; c++) {
+        var v = (typeof row[c] === "string" ? row[c] : "").trim().toLowerCase();
+        if (v === "артикул" || v === "номер" || v.indexOf("номер детал") >= 0 ||
+          v.indexOf("каталож") >= 0 || v.indexOf("part") >= 0) { col = c; start = i + 1; found = true; break; }
+      }
+    }
+    var out = [];
+    for (var r = start; r < rows.length; r++) {
+      var val = normArt((rows[r] || [])[col]); if (val) out.push(val);
+    }
+    return out;
+  }
+  function numbersFromText(t) {
+    return (t || "").split(/[\s,;]+/).map(normArt).filter(Boolean);
+  }
+  var CHK_COLS = [
+    ["Запрошенный номер", "req", "s"], ["Наличие", "statusText", "s"],
+    ["Каталожный номер", "pn", "s"], ["Наименование (RU)", "n", "s"],
+    ["Наименование (EN)", "en", "s"], ["Наименование (ZH)", "zh", "s"],
+    ["Цена, " + CURRENCY, "p", "n"], ["Группа", "g", "s"],
+    ["Взаимозам. артикул", "x", "s"], ["Кол-во по схеме", "qty", "s"],
+    ["Разделы", "secs", "s"]
+  ];
+  var STATUS_TEXT = { in: "✓ есть в каталоге", xref: "↔ есть аналог (взаимозам.)", miss: "✗ нет в каталоге" };
+  function runCheck(nums) {
+    if (!nums.length) { chkStatus("Список пуст — вставьте номера или выберите файл.", true); return; }
+    // de-duplicate, keep order
+    var seen = {}, list = [];
+    nums.forEach(function (q) { var k = normArt(q); if (k && !seen[k]) { seen[k] = 1; list.push(q); } });
+    var res = list.map(lookupPart).filter(Boolean);
+    res.forEach(function (r) { r.statusText = STATUS_TEXT[r.status] || ""; });
+    lastCheck = res;
+    var inN = res.filter(function (r) { return r.status === "in"; }).length;
+    var xN = res.filter(function (r) { return r.status === "xref"; }).length;
+    var missN = res.filter(function (r) { return r.status === "miss"; }).length;
+    renderCheckTable(res, inN, xN, missN);
+    chkStatus("");
+    $("#chkExport").disabled = false;
+  }
+  function renderCheckTable(res, inN, xN, missN) {
+    var box = $("#chkResults");
+    var head = "<div class='chk-summary'>Проверено: <b>" + res.length + "</b> · " +
+      "в каталоге: <b>" + inN + "</b>" + (xN ? " · по взаимозам.: <b>" + xN + "</b>" : "") +
+      " · не найдено: <b>" + missN + "</b></div>";
+    var th = "<tr>" + CHK_COLS.map(function (c) { return "<th>" + esc(c[0]) + "</th>"; }).join("") + "</tr>";
+    var body = res.map(function (r) {
+      return "<tr class='" + (r.status === "miss" ? "miss" : "") + "'>" + CHK_COLS.map(function (c) {
+        var key = c[1], v = r[key];
+        if (key === "statusText")
+          return "<td class='st " + r.status + "'>" + esc(v) + "</td>";
+        if (key === "p") return "<td class='num'>" + (v === "" ? "—" : fmt(v)) + "</td>";
+        if (key === "req" || key === "pn" || key === "x")
+          return "<td class='mono'>" + esc(v || (key === "req" ? "" : "—")) + "</td>";
+        return "<td>" + esc(v || "") + "</td>";
+      }).join("") + "</tr>";
+    }).join("");
+    box.innerHTML = head + "<div class='chk-table-wrap'><table class='chk'><thead>" + th +
+      "</thead><tbody>" + body + "</tbody></table></div>";
+  }
+  function exportCheck() {
+    if (!lastCheck || !lastCheck.length) { toast("Нет результатов"); return; }
+    var headers = CHK_COLS.map(function (c) { return c[0]; });
+    var types = CHK_COLS.map(function (c) { return c[2]; });
+    var rows = lastCheck.map(function (r) {
+      return CHK_COLS.map(function (c) {
+        var v = r[c[1]];
+        return c[1] === "p" ? (v === "" ? "" : v) : (v == null ? "" : v);
+      });
+    });
+    downloadBlob("NTE240_проверка_наличия.xlsx", xlsx("Проверка", headers, rows, types));
+    toast("Результат экспортирован: " + rows.length);
+  }
+  function chkStatus(msg, err) {
+    var s = $("#chkStatus"); if (!s) return;
+    s.textContent = msg || ""; s.classList.toggle("err", !!err);
+  }
+  function onCheckFile(file) {
+    if (!file) return;
+    $("#chkFileLabel").textContent = file.name;
+    chkStatus("Читаю файл…");
+    var reader = /\.csv$/i.test(file.name) ? file.text().then(parseCsv) : file.arrayBuffer().then(readXlsx);
+    reader.then(function (rows) { runCheck(numbersFromRows(rows)); })
+      .catch(function (e) {
+        chkStatus("Не удалось прочитать файл: " + (e && e.message ? e.message : e) +
+          ". Попробуйте .csv или вставьте список текстом.", true);
+      });
+  }
+  function openCheckModal() { chkStatus(""); $("#checkModal").classList.add("open"); $("#chkOverlay").classList.add("open"); }
+  function closeCheckModal() { $("#checkModal").classList.remove("open"); $("#chkOverlay").classList.remove("open"); }
+  function clearCheck() {
+    $("#chkText").value = ""; $("#chkResults").innerHTML = ""; $("#chkFileLabel").textContent = "…или выбрать файл со списком";
+    $("#chkFile").value = ""; $("#chkExport").disabled = true; lastCheck = null; chkStatus("");
   }
 
   // ---- lightbox + toast -------------------------------------------------
@@ -883,6 +1025,14 @@
     $("#printOrder").addEventListener("click", printOrder);
     $("#exportAll").addEventListener("click", exportAllNumbers);
 
+    $("#checkBtn").addEventListener("click", openCheckModal);
+    $("#chkClose").addEventListener("click", closeCheckModal);
+    $("#chkOverlay").addEventListener("click", closeCheckModal);
+    $("#chkRun").addEventListener("click", function () { runCheck(numbersFromText($("#chkText").value)); });
+    $("#chkFile").addEventListener("change", function () { onCheckFile(this.files[0]); });
+    $("#chkExport").addEventListener("click", exportCheck);
+    $("#chkClear").addEventListener("click", clearCheck);
+
     $("#pricesBtn").addEventListener("click", openPriceModal);
     $("#pmClose").addEventListener("click", closePriceModal);
     $("#pmOverlay").addEventListener("click", closePriceModal);
@@ -899,7 +1049,7 @@
     $("#lbClose").addEventListener("click", closeLightbox);
     $("#lightbox").addEventListener("click", function (e) { if (e.target.id === "lightbox") closeLightbox(); });
     document.addEventListener("keydown", function (e) {
-      if (e.key === "Escape") { closeLightbox(); closeCart(); closePriceModal(); }
+      if (e.key === "Escape") { closeLightbox(); closeCart(); closePriceModal(); closeCheckModal(); }
     });
     $("#menuBtn").addEventListener("click", function () { $("#sidebar").classList.toggle("open"); });
 
